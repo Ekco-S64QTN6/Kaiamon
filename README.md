@@ -38,7 +38,7 @@
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/ekco/Kaiamon.git
+git clone https://github.com/Ekco-S64QTN6/Kaiamon.git
 cd Kaiamon
 pip install psutil
 pip install pynvml  # optional — for NVIDIA GPU monitoring
