@@ -1,6 +1,6 @@
 # Kaiamon
 
-Kaiamon is a Linux terminal process monitor with an **htop-style, live process table**. It reads process and system metrics from \`/proc\`, updates them in a background collector, and renders immutable snapshots through a curses interface. The current implementation focuses on the process-monitor core rather than the former multi-panel system dashboard.
+Kaiamon is a Linux terminal process monitor with an **htop-style, live process table**. It reads process and system metrics from `/proc`, updates them in a background collector, and renders immutable snapshots through a curses interface. The current implementation focuses on the process-monitor core rather than the former multi-panel system dashboard.
 
 ## Status
 
@@ -8,43 +8,43 @@ The first process-monitor milestone is implemented: live process enumeration, de
 
 ## Requirements
 
-- Linux with a mounted \`/proc\` filesystem
+- Linux with a mounted `/proc` filesystem
 - Python 3.10 or newer
-- A terminal with curses support (the standard Python \`curses\` module)
+- A terminal with curses support (the standard Python `curses` module)
 
-The process monitor itself uses only the Python standard library. It does not require root to list processes, though permissions can restrict command lines and process actions. The archived dashboard in \`legacy_dashboard.py\` retains its previous optional \`psutil\` and \`pynvml\` dependencies and is not started by the process-monitor entry point.
+The process monitor itself uses only the Python standard library. It does not require root to list processes, though permissions can restrict command lines and process actions. The archived dashboard in `legacy_dashboard.py` retains its previous optional `psutil` and `pynvml` dependencies and is not started by the process-monitor entry point.
 
 ## Installation
 
-\`\`\`bash
+```bash
 git clone https://github.com/Ekco-S64QTN6/Kaiamon.git
 cd Kaiamon
 python3 kaiamon.py
-\`\`\`
+```
 
 For a source checkout, no package installation is required. Run it in a terminal at least 60 columns wide and 8 rows high; a larger terminal is recommended.
 
 ## Usage
 
-\`\`\`bash
+```bash
 python3 kaiamon.py
-\`\`\`
+```
 
 The process table shows:
 
 | Column | Meaning |
 |---|---|
-| \`PID\` | Process ID |
-| \`USER\` | Effective user from \`/proc/<pid>/status\` |
-| \`PRI\` / \`NI\` | Scheduler priority and nice value |
-| \`VIRT\` | Virtual address space |
-| \`RES\` | Resident memory |
-| \`SHR\` | Shared resident pages from \`/proc/<pid>/statm\` |
-| \`S\` | Process state |
-| \`CPU%\` | CPU use calculated from process and system counter deltas |
-| \`MEM%\` | Resident memory as a percentage of physical memory |
-| \`TIME+\` | Accumulated process CPU time |
-| \`COMMAND\` | Command line, falling back to the process name when empty |
+| `PID` | Process ID |
+| `USER` | Effective user from `/proc/<pid>/status` |
+| `PRI` / `NI` | Scheduler priority and nice value |
+| `VIRT` | Virtual address space |
+| `RES` | Resident memory |
+| `SHR` | Shared resident pages from `/proc/<pid>/statm` |
+| `S` | Process state |
+| `CPU%` | CPU use calculated from process and system counter deltas |
+| `MEM%` | Resident memory as a percentage of physical memory |
+| `TIME+` | Accumulated process CPU time |
+| `COMMAND` | Command line, falling back to the process name when empty |
 
 CPU utilization and memory utilization meters appear above the table. Per-core CPU percentages are shown beside the aggregate CPU meter (up to eight cores in the compact header). Processes that disappear or become inaccessible while sampling are skipped rather than terminating the collector.
 
@@ -52,27 +52,27 @@ CPU utilization and memory utilization meters appear above the table. Per-core C
 
 | Key | Action |
 |---|---|
-| \`↑\` / \`↓\` or \`j\` / \`k\` | Move selection |
-| \`Page Up\` / \`Page Down\` | Scroll by ten rows |
-| \`Home\` / \`End\` | Select first / last process |
-| \`s\` or \`F6\` | Cycle sort direction and column (CPU, MEM, PID, USER, TIME, COMMAND) |
-| \`/\` | Filter by PID, user, or command substring |
-| \`Esc\` | Clear the filter |
-| \`t\` or \`F5\` | Toggle parent/child tree view |
-| \`K\` | Choose and send TERM, KILL, INT, or HUP to the selected process |
-| \`r\` | Set the selected process nice value (-20 through 19) |
-| \`F1\` | Show the keybinding summary in the status line |
-| \`q\` | Quit |
+| `↑` / `↓` or `j` / `k` | Move selection |
+| `Page Up` / `Page Down` | Scroll by ten rows |
+| `Home` / `End` | Select first / last process |
+| `s` or `F6` | Cycle sort direction and column (CPU, MEM, PID, USER, TIME, COMMAND) |
+| `/` | Filter by PID, user, or command substring |
+| `Esc` | Clear the filter |
+| `t` or `F5` | Toggle parent/child tree view |
+| `K` | Choose and send TERM, KILL, INT, or HUP to the selected process |
+| `r` | Set the selected process nice value (-20 through 19) |
+| `F1` | Show the keybinding summary in the status line |
+| `q` | Quit |
 
-Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit; \`KILL\` is available but should be used only when a graceful termination is not appropriate.
+Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit; `KILL` is available but should be used only when a graceful termination is not appropriate.
 
 ## Configuration
 
-There is no configuration file or environment-variable interface yet. The process poll interval defaults to one second and is defined by \`POLL_INTERVAL\` in \`process_monitor.py\`. The UI refresh interval is \`FRAME_INTERVAL_MS\`. These are source-level defaults for now.
+There is no configuration file or environment-variable interface yet. The process poll interval defaults to one second and is defined by `POLL_INTERVAL` in `process_monitor.py`. The UI refresh interval is `FRAME_INTERVAL_MS`. These are source-level defaults for now.
 
 ## Architecture
 
-\`\`\`text
+```text
 /proc (stat, meminfo, <pid>/stat, status, statm, cmdline)
                          |
                          v
@@ -90,17 +90,17 @@ There is no configuration file or environment-variable interface yet. The proces
                  - curses rendering/input
                  - sort/filter/tree presentation
                  - validated process actions
-\`\`\`
+```
 
-\`ProcessCollector\` owns the polling thread, prior CPU counters, and its published snapshot. It skips common process races (\`ENOENT\`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen \`ProcessSnapshot\`, and all curses calls remain in the main thread. \`curses.wrapper\` owns terminal-mode setup/restoration, while the UI stops its collector in a \`finally\` block.
+`ProcessCollector` owns the polling thread, prior CPU counters, and its published snapshot. It skips common process races (`ENOENT`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen `ProcessSnapshot`, and all curses calls remain in the main thread. `curses.wrapper` owns terminal-mode setup/restoration, while the UI stops its collector in a `finally` block.
 
-The previous ping, systemd-service, thermal, and journal collectors are preserved in \`legacy_dashboard.py\` for reference. They are not launched by the new process-centric entry point and will be reconsidered as optional secondary panels only after the process core has matured.
+The previous ping, systemd-service, thermal, and journal collectors are preserved in `legacy_dashboard.py` for reference. They are not launched by the new process-centric entry point and will be reconsidered as optional secondary panels only after the process core has matured.
 
 ## Comparison with htop
 
 **Supported in Kaiamon:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU percentages; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display; signal selection; renice; terminal keyboard navigation.
 
-**Different from htop:** Kaiamon currently reads Linux \`/proc\` directly and is Linux-only; it uses a small fixed set of columns and source-level polling defaults; tree view is a flattened hierarchy without collapse controls; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
+**Different from htop:** Kaiamon currently reads Linux `/proc` directly and is Linux-only; it uses a small fixed set of columns and source-level polling defaults; tree view is a flattened hierarchy without collapse controls; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
 
 **Not yet implemented:** full htop setup/configuration screens, sortable column reordering, process/thread toggles, interactive tree collapse, CPU affinity, I/O and disk/network meters, GPU process metrics, custom color schemes, cross-platform backends, and a comprehensive interactive action-confirmation workflow. Kaiamon is htop-style, not yet a drop-in feature-equivalent replacement.
 
@@ -108,21 +108,21 @@ The previous ping, systemd-service, thermal, and journal collectors are preserve
 
 Run the synthetic test suite without requiring root or a live host process list:
 
-\`\`\`bash
+```bash
 python -m compileall -q .
 python -m pytest -q
-\`\`\`
+```
 
-The fixtures create small \`/proc\`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Optional checks when installed/configured:
+The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Optional checks when installed/configured:
 
-\`\`\`bash
+```bash
 python -m ruff check .
 python -m mypy .
-\`\`\`
+```
 
 ## Contributing
 
-Keep \`/proc\` access inside collectors and keep curses calls on the main thread. New collector output should be copied into frozen snapshot dataclasses before the UI sees it. Add fixture-based regression tests for parsing and race conditions; do not make the test suite depend on the host's live process list or privileged actions. Run the full test suite and relevant static checks before opening a pull request.
+Keep `/proc` access inside collectors and keep curses calls on the main thread. New collector output should be copied into frozen snapshot dataclasses before the UI sees it. Add fixture-based regression tests for parsing and race conditions; do not make the test suite depend on the host's live process list or privileged actions. Run the full test suite and relevant static checks before opening a pull request.
 
 ## Roadmap
 
