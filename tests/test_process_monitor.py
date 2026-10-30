@@ -18,14 +18,15 @@ from process_core import (
     parse_cpu_times,
     parse_proc_stat,
 )
-from process_actions import (\n    renice_process, signal_process, validate_nice_value, validate_process_target,\n)\nfrom process_monitor import (
+from process_actions import (
+    renice_process, signal_process, validate_nice_value, validate_process_target,
+)
+from process_monitor import (
     DEFAULT_COLUMNS,
     ProcessMonitorUI,
     filter_processes,
     parse_columns,
     parse_refresh_interval,
-    renice_process,
-    signal_process,
     sort_processes,
     tree_processes,
 )
