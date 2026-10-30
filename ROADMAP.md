@@ -20,9 +20,10 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 
 ## Next
 
-1. Split curses rendering and input handling into focused modules, keeping every curses call on the main thread and consuming only frozen snapshots.
-2. Expand the UI module tests and static type coverage as rendering/input responsibilities are separated.
-3. Consider optional secondary panels for legacy ping/service/thermal/log telemetry only if they preserve process-table space and do not slow process sampling or rendering.
+1. [x] Extract snapshot-driven curses rendering into `process_render.py`; keep curses calls on the main thread and pass only frozen snapshots.
+2. Split keyboard input and prompts into a focused module without moving curses operations off the main thread.
+3. Expand renderer/input tests and static type coverage as responsibilities are separated.
+4. Consider optional secondary panels for legacy ping/service/thermal/log telemetry only if they preserve process-table space and do not slow process sampling or rendering.
 
 ## Later / explicitly deferred
 
