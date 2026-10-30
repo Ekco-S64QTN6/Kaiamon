@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Linux process monitor with an htop-style curses interface.
+"""Curses UI and process controls for the Linux htop-style process monitor.
 
-The collector owns its /proc reads and publishes frozen snapshots. Curses is
-used only by ProcessMonitorUI on the main thread.
+Procfs sampling and immutable process snapshots live in process_core.py.
+All curses operations stay in the main thread.
 """
 from __future__ import annotations
 
