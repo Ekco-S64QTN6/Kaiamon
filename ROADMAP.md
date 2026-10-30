@@ -8,7 +8,7 @@ Kaiamon is being refocused as a Linux htop-style process monitor. The legacy pin
 - [x] Add a `/proc` collector for PID, parent PID, user, priority, nice, virtual/resident/shared memory, state, CPU%, MEM%, cumulative CPU time, and command line.
 - [x] Calculate process CPU usage using per-PID and system CPU counter deltas; guard against PID reuse with process start-time ticks.
 - [x] Publish frozen `ProcessSnapshot` and `ProcessInfo` objects behind a per-collector lock.
-- [x] Add CPU and memory meters, with compact per-core CPU percentages.
+- [x] Add CPU and memory meters, with compact per-core CPU meters.
 - [x] Add process table selection, paging, sorting, filtering, and parent/child tree display.
 - [x] Add guarded signal selection and renice operations.
 - [x] Add synthetic `/proc` fixtures and tests for parsing, sampling, sorting, filtering, tree handling, and action validation.
