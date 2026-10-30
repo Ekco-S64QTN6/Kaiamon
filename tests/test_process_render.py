@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import curses
-
 import pytest
 
 from process_core import ProcessSnapshot
