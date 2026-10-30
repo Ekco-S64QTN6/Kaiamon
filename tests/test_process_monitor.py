@@ -54,7 +54,7 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
             _stat_line(123, "python worker (test)", utime=10, stime=5)
         )
         (proc / "status").write_text(
-            "Name:\tpython\nUid:\t1000\t1000\t1000\t1000\n"
+            "Name:\tpython\nUid:\t1000\t1001\t1000\t1000\n"
         )
         (proc / "statm").write_text("1000 100 20 0 0 0 0\n")
         (proc / "cmdline").write_bytes(b"python\0worker.py\0")
@@ -107,7 +107,7 @@ def test_process_collector_reads_fixture_and_publishes_nonempty_snapshot(
     assert len(first.processes) == 1
     process = first.processes[0]
     assert process.pid == 123
-    assert process.user == "uid1000"
+    assert process.user == "uid1001"
     assert process.command == "python worker.py"
     assert process.virt_kb == 400
     assert process.res_kb == 400
