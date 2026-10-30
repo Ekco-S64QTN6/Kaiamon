@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Isolate process actions from the curses UI
+
+- Move PID/nice/signal validation and process-control syscalls into curses-independent `process_actions.py`.
+- Add regression coverage proving rejected targets, unsupported signals, and invalid nice values never reach operating-system calls.
+- Extend the configured Ruff and Mypy scopes to cover the new module.
+
 ## Unreleased — Separate process core module
 
 - Extract immutable process models, typed procfs parsing, CPU accounting, and the `/proc` polling collector into curses-independent `process_core.py`.
