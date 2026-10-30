@@ -309,7 +309,7 @@ def test_signal_action_requires_explicit_confirmation(monkeypatch: pytest.Monkey
     monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(prompts))
     signal_calls: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        "process_monitor.signal_process",
+        "process_input.signal_process",
         lambda pid, signum: signal_calls.append((pid, signum)),
     )
 
@@ -333,7 +333,7 @@ def test_signal_action_runs_only_after_yes_confirmation(monkeypatch: pytest.Monk
     monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(prompts))
     signal_calls: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        "process_monitor.signal_process",
+        "process_input.signal_process",
         lambda pid, signum: signal_calls.append((pid, signum)),
     )
 
@@ -411,3 +411,25 @@ def test_tree_keyboard_controls_collapse_expand_and_toggle() -> None:
     assert len(ui._visible(snapshot)) == 2
     ui._handle_key(ord(" "))
     assert ui.collapsed == {10}
+
+
+def test_ui_delegates_keyboard_dispatch_to_input_controller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    calls: list[tuple[object, int]] = []
+    monkeypatch.setattr(
+        ui.input, "handle_key", lambda owner, key: calls.append((owner, key)),
+    )
+
+    ui._handle_key(ord("j"))
+
+    assert calls == [(ui, ord("j"))]
+
+
+def test_input_controller_owns_prompt_and_tree_expansion() -> None:
+    from process_input import ProcessInput
+
+    assert callable(ProcessInput.prompt)
+    assert callable(ProcessInput.set_selected_tree_expansion)
+    assert callable(ProcessInput.handle_key)
