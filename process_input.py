@@ -136,9 +136,15 @@ class ProcessInput:
                     ui.status = f"Sent {label} to PID {proc.pid}"
                 except (KeyError, ValueError, OSError, PermissionError) as exc:
                     ui.status = f"Signal failed: {exc}"
+        elif key == ord("["):
+            ui.horizontal_scroll = max(0, ui.horizontal_scroll - 8)
+            ui.status = "Process table shifted left"
+        elif key == ord("]"):
+            ui.horizontal_scroll += 8
+            ui.status = "Process table shifted right"
         elif key == curses.KEY_F1:
             ui.status = (
-                "↑/↓ Select  PgUp/PgDn Scroll  F5 Tree  ←/→ Collapse  "
-                "Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
+                "↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
+                "←/→ Collapse  Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )
 

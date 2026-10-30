@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from process_core import ProcessSnapshot
+from process_core import ProcessInfo, ProcessSnapshot
 from process_monitor import ProcessMonitorUI
 
 
@@ -57,3 +57,54 @@ def test_renderer_draws_snapshot_header_and_empty_process_footer(
     assert "PID" in rendered
     assert "0 processes" in rendered
     assert screen.refreshed
+
+
+def test_renderer_horizontal_scroll_reveals_default_command_column(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    screen = FakeScreen(width=80)
+    ui._stdscr = screen
+    command = "daemon-command-that-exceeds-width"
+    process = ProcessInfo(
+        321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+        0.0, 0.0, 1.0, command, 10,
+    )
+    snapshot = ProcessSnapshot(processes=(process,))
+
+    ui.renderer.draw(ui, snapshot)
+    first_header = next(line for y, _x, line, _n in screen.lines if y == 3)
+    first_row = next(line for y, _x, line, _n in screen.lines if y == 4)
+    assert "COMMAND" in first_header
+    assert command[:24] not in first_row
+    assert len(first_row) <= screen.width
+    assert ui.horizontal_scroll == 0
+
+    screen.lines.clear()
+    ui.horizontal_scroll = 999
+    ui.renderer.draw(ui, snapshot)
+    scrolled_header = next(line for y, _x, line, _n in screen.lines if y == 3)
+    scrolled_row = next(line for y, _x, line, _n in screen.lines if y == 4)
+
+    assert ui.horizontal_scroll == 15
+    assert "COMMAND" in scrolled_header
+    assert command[:24] in scrolled_row
+    assert len(scrolled_header) <= screen.width
+    assert len(scrolled_row) <= screen.width
+
+def test_renderer_keeps_reordered_columns_in_fixed_width_layout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI(columns=("COMMAND", "PID", "CPU"))
+    screen = FakeScreen(width=60)
+    ui._stdscr = screen
+
+    ui.renderer.draw(ui, ProcessSnapshot())
+
+    header = next(line for y, _x, line, _n in screen.lines if y == 3)
+    assert header.rstrip().startswith("COMMAND")
+    assert "PID" in header
+    assert "CPU%" in header
+    assert ui.horizontal_scroll == 0

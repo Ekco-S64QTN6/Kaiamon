@@ -154,6 +154,7 @@ class ProcessMonitorUI:
         self.input = ProcessInput()
         self.selected = 0
         self.scroll = 0
+        self.horizontal_scroll = 0
         self.sort_field = "CPU"
         self.descending = True
         self.filter_query = ""

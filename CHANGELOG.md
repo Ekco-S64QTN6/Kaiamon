@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Horizontal process-table scrolling
+
+- Preserve stable fixed widths for every configured column and allow the process table to scroll horizontally with `[` and `]`.
+- Clamp the horizontal offset when the terminal is resized or the selected column layout fits the viewport.
+- Add regression tests for default-column clipping, scroll bounds, and reordered columns.
+
 ## Unreleased — Expand renderer and input regression coverage
 
 - Add focused renderer tests for minimum terminal handling and normal snapshot/footer drawing.
