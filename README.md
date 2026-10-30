@@ -92,7 +92,7 @@ There is no configuration file or environment-variable interface yet. The proces
                  - validated process actions
 ```
 
-`ProcessCollector` owns the polling thread, prior CPU counters, and its published snapshot. It skips common process races (`ENOENT`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen `ProcessSnapshot`, and all curses calls remain in the main thread. `curses.wrapper` owns terminal-mode setup/restoration, while the UI stops its collector in a `finally` block.
+`ProcessCollector` owns the polling thread, prior CPU counters, and its published snapshot. It skips common process races (`ENOENT`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen `ProcessSnapshot`, and all curses calls remain in the main thread. The UI handles SIGINT and SIGTERM by exiting its main loop; `curses.wrapper` restores terminal mode on normal exit and exceptions, while the collector is stopped and the original signal handlers are restored in a `finally` block.
 
 The previous ping, systemd-service, thermal, and journal collectors are preserved in `legacy_dashboard.py` for reference. They are not launched by the new process-centric entry point and will be reconsidered as optional secondary panels only after the process core has matured.
 
