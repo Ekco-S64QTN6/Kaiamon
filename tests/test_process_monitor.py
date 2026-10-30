@@ -232,7 +232,6 @@ def test_process_signal_and_renice_call_os_only_after_validation() -> None:
         setpriority.assert_called_once_with(os.PRIO_PROCESS, 123, 5)
 
 
-
 def test_invalid_actions_never_reach_operating_system() -> None:
     with (
         patch("process_actions.os.getpid", return_value=999),
@@ -247,6 +246,7 @@ def test_invalid_actions_never_reach_operating_system() -> None:
             renice_process(123, 20)
         kill.assert_not_called()
         setpriority.assert_not_called()
+
 
 def test_ui_stops_collector_when_curses_wrapper_fails(
     monkeypatch: pytest.MonkeyPatch,
