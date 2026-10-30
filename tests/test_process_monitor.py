@@ -248,6 +248,17 @@ def test_invalid_actions_never_reach_operating_system() -> None:
         setpriority.assert_not_called()
 
 
+def test_ui_delegates_snapshot_rendering_to_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
+    ui = ProcessMonitorUI()
+    snapshot = ProcessSnapshot(processes=())
+    calls: list[tuple[object, ProcessSnapshot]] = []
+    monkeypatch.setattr(ui.renderer, "draw", lambda owner, value: calls.append((owner, value)))
+
+    ui._draw(snapshot)
+
+    assert calls == [(ui, snapshot)]
+
+
 def test_ui_stops_collector_when_curses_wrapper_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
