@@ -225,12 +225,22 @@ def tree_processes(
     result: list[tuple[ProcessInfo, int]] = []
     visited: set[int] = set()
 
+    def mark_hidden(parent_pid: int) -> None:
+        """Keep descendants of a collapsed node out of the orphan fallback."""
+        for child in children.get(parent_pid, []):
+            if child.pid in visited:
+                continue
+            visited.add(child.pid)
+            mark_hidden(child.pid)
+
     def visit(process: ProcessInfo, depth: int) -> None:
         if process.pid in visited:
             return
         visited.add(process.pid)
         result.append((process, depth))
-        if process.pid not in collapsed_pids:
+        if process.pid in collapsed_pids:
+            mark_hidden(process.pid)
+        else:
             for child in children.get(process.pid, []):
                 visit(child, depth + 1)
 
