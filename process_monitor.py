@@ -6,7 +6,9 @@ used only by ProcessMonitorUI on the main thread.
 """
 from __future__ import annotations
 
+import argparse
 import curses
+import math
 import os
 import pwd
 import signal
@@ -15,7 +17,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 POLL_INTERVAL = 1.0
 FRAME_INTERVAL_MS = 100
@@ -26,6 +28,55 @@ SIGNAL_CHOICES = {
     "3": (signal.SIGINT, "INT"),
     "4": (signal.SIGHUP, "HUP"),
 }
+
+DEFAULT_COLUMNS = (
+    "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
+    "CPU", "MEM", "TIME", "COMMAND",
+)
+COLUMN_LABELS = {
+    "PID": "PID", "USER": "USER", "PRI": "PRI", "NI": "NI",
+    "VIRT": "VIRT", "RES": "RES", "SHR": "SHR", "STATE": "S",
+    "CPU": "CPU%", "MEM": "MEM%", "TIME": "TIME+", "COMMAND": "COMMAND",
+}
+COLUMN_WIDTHS = {
+    "PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7,
+    "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24,
+}
+RIGHT_ALIGNED_COLUMNS = frozenset({
+    "PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME",
+})
+COLUMN_ALIASES = {"CPU%": "CPU", "MEM%": "MEM", "TIME+": "TIME", "S": "STATE"}
+
+
+def parse_columns(value: str) -> tuple[str, ...]:
+    """Parse an ordered, comma-separated list of visible process columns."""
+    if not isinstance(value, str):
+        raise argparse.ArgumentTypeError("columns must be a comma-separated string")
+    requested = [part.strip().upper() for part in value.split(",")]
+    if not requested or any(not part for part in requested):
+        raise argparse.ArgumentTypeError("columns cannot contain empty entries")
+    columns = tuple(COLUMN_ALIASES.get(part, part) for part in requested)
+    unsupported = [column for column in columns if column not in COLUMN_LABELS]
+    if unsupported:
+        raise argparse.ArgumentTypeError(
+            "unsupported column(s): " + ", ".join(unsupported)
+        )
+    if len(set(columns)) != len(columns):
+        raise argparse.ArgumentTypeError("columns cannot contain duplicates")
+    return columns
+
+
+def parse_refresh_interval(value: str) -> float:
+    """Validate a /proc sampling interval in seconds."""
+    try:
+        interval = float(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("refresh interval must be a number") from exc
+    if not math.isfinite(interval) or interval < 0.05:
+        raise argparse.ArgumentTypeError(
+            "refresh interval must be a finite number of at least 0.05 seconds"
+        )
+    return interval
 
 
 @dataclass(frozen=True)
@@ -158,10 +209,11 @@ def sort_processes(
 
 def tree_processes(
     processes: Iterable[ProcessInfo], field: str = "CPU",
-    descending: bool = True,
+    descending: bool = True, collapsed: Iterable[int] | None = None,
 ) -> tuple[tuple[ProcessInfo, int], ...]:
-    """Flatten a process parent/child graph into (process, depth) rows."""
+    """Flatten a process hierarchy, omitting descendants of collapsed PIDs."""
     ordered = sort_processes(processes, field, descending)
+    collapsed_pids = set(collapsed or ())
     by_pid = {process.pid: process for process in ordered}
     children: dict[int, list[ProcessInfo]] = {}
     roots: list[ProcessInfo] = []
@@ -178,8 +230,9 @@ def tree_processes(
             return
         visited.add(process.pid)
         result.append((process, depth))
-        for child in children.get(process.pid, []):
-            visit(child, depth + 1)
+        if process.pid not in collapsed_pids:
+            for child in children.get(process.pid, []):
+                visit(child, depth + 1)
 
     for root in roots:
         visit(root, 0)
@@ -403,14 +456,20 @@ class ProcessCollector:
 class ProcessMonitorUI:
     """Curses front end. All curses calls remain on the main thread."""
 
-    def __init__(self) -> None:
-        self.collector = ProcessCollector()
+    def __init__(
+        self, *, refresh_interval: float = POLL_INTERVAL,
+        columns: Sequence[str] = DEFAULT_COLUMNS,
+    ) -> None:
+        self.refresh_interval = parse_refresh_interval(str(refresh_interval))
+        self.columns = parse_columns(",".join(columns))
+        self.collector = ProcessCollector(poll_interval=self.refresh_interval)
         self.selected = 0
         self.scroll = 0
         self.sort_field = "CPU"
         self.descending = True
         self.filter_query = ""
         self.tree_mode = False
+        self.collapsed: set[int] = set()
         self.status = (
             "F1 Help  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
         )
@@ -460,7 +519,9 @@ class ProcessMonitorUI:
     ) -> tuple[tuple[ProcessInfo, int], ...]:
         filtered = filter_processes(snapshot.processes, self.filter_query)
         if self.tree_mode:
-            return tree_processes(filtered, self.sort_field, self.descending)
+            return tree_processes(
+                filtered, self.sort_field, self.descending, self.collapsed,
+            )
         return tuple(
             (process, 0)
             for process in sort_processes(
@@ -515,13 +576,30 @@ class ProcessMonitorUI:
             + f"  Filter:{self.filter_query or '—'}"
         )
         self._put(2, 0, mode[:width], curses.color_pair(3))
-        header = (
-            " PID   USER    PRI  NI    VIRT     RES    SHR S   "
-            "CPU%  MEM%   TIME+     COMMAND"
+        fixed_width = sum(
+            COLUMN_WIDTHS[column]
+            for column in self.columns if column != "COMMAND"
         )
-        self._put(3, 0, header[:width], curses.A_REVERSE | curses.A_BOLD)
+        spaces = max(0, len(self.columns) - 1)
+        command_is_last = bool(self.columns and self.columns[-1] == "COMMAND")
+        header_command_width = max(1, width - 1 - fixed_width - spaces) if command_is_last else COLUMN_WIDTHS["COMMAND"]
+        header_cells = []
+        for column in self.columns:
+            cell_width = header_command_width if column == "COMMAND" else COLUMN_WIDTHS[column]
+            alignment = "<" if column == "COMMAND" else ">"
+            header_cells.append(f"{COLUMN_LABELS[column]:{alignment}{cell_width}}")
+        self._put(
+            3, 0, " ".join(header_cells)[:width],
+            curses.A_REVERSE | curses.A_BOLD,
+        )
 
         rows = self._visible(snapshot)
+        filtered = filter_processes(snapshot.processes, self.filter_query)
+        filtered_pids = {process.pid for process in filtered}
+        child_pids = {
+            process.ppid for process in filtered
+            if process.ppid in filtered_pids and process.ppid != process.pid
+        }
         max_rows = max(0, height - 6)
         if self.selected >= len(rows):
             self.selected = max(0, len(rows) - 1)
@@ -533,19 +611,32 @@ class ProcessMonitorUI:
             rows[self.scroll:self.scroll + max_rows]
         ):
             screen_y = 4 + view_index
-            prefix = "  " * min(depth, 6) + ("↳ " if depth else "")
-            command_room = max(1, width - 71 - len(prefix))
-            command = (prefix + proc.command).replace("\n", " ")
-            line = (
-                f"{proc.pid:>6} {proc.user[:8]:<8} "
-                f"{proc.priority:>3} {proc.nice:>3} "
-                f"{self._fmt_size(proc.virt_kb):>7} "
-                f"{self._fmt_size(proc.res_kb):>7} "
-                f"{self._fmt_size(proc.shr_kb):>6} {proc.state[:1]:1} "
-                f"{proc.cpu_percent:>6.1f} {proc.mem_percent:>5.1f} "
-                f"{self._fmt_time(proc.cpu_time_s):>8} "
-                f"{command[:command_room]}"
+            values = {
+                "PID": str(proc.pid), "USER": proc.user,
+                "PRI": str(proc.priority), "NI": str(proc.nice),
+                "VIRT": self._fmt_size(proc.virt_kb),
+                "RES": self._fmt_size(proc.res_kb),
+                "SHR": self._fmt_size(proc.shr_kb), "STATE": proc.state[:1],
+                "CPU": f"{proc.cpu_percent:.1f}", "MEM": f"{proc.mem_percent:.1f}",
+                "TIME": self._fmt_time(proc.cpu_time_s),
+                "COMMAND": proc.command.replace("\n", " "),
+            }
+            indent = ""
+            if self.tree_mode:
+                marker = ("+" if proc.pid in self.collapsed else "-") if proc.pid in child_pids else " "
+                indent = "  " * min(depth, 6) + marker + " "
+                target = "COMMAND" if "COMMAND" in values else ("PID" if "PID" in values else self.columns[0])
+                values[target] = indent + values[target]
+            command_width = (
+                max(1, width - 1 - len(indent) - fixed_width - spaces)
+                if command_is_last else COLUMN_WIDTHS["COMMAND"]
             )
+            cells = []
+            for column in self.columns:
+                cell_width = command_width if column == "COMMAND" else COLUMN_WIDTHS[column]
+                alignment = "<" if column == "COMMAND" else (">" if column in RIGHT_ALIGNED_COLUMNS else "<")
+                cells.append(f"{values[column]:{alignment}{cell_width}}")
+            line = " ".join(cells)
             attr = (
                 curses.color_pair(5)
                 if self.scroll + view_index == self.selected else 0
@@ -598,6 +689,33 @@ class ProcessMonitorUI:
             return None
         return rows[self.selected][0]
 
+    def _set_selected_tree_expansion(self, collapse: bool | None) -> None:
+        """Collapse, expand, or toggle the selected node in tree mode."""
+        if not self.tree_mode:
+            self.status = "Enable tree view first (t)"
+            return
+        snapshot = self.collector.get_snapshot()
+        rows = self._visible(snapshot)
+        if not rows or self.selected >= len(rows):
+            self.status = "No process selected"
+            return
+        process = rows[self.selected][0]
+        filtered = filter_processes(snapshot.processes, self.filter_query)
+        has_children = any(
+            item.ppid == process.pid and item.pid != process.pid
+            for item in filtered
+        )
+        if not has_children:
+            self.status = f"PID {process.pid} has no visible children"
+            return
+        should_collapse = process.pid not in self.collapsed if collapse is None else collapse
+        if should_collapse:
+            self.collapsed.add(process.pid)
+            self.status = f"Collapsed children of PID {process.pid}"
+        else:
+            self.collapsed.discard(process.pid)
+            self.status = f"Expanded children of PID {process.pid}"
+
     def _prompt(self, prompt: str) -> str:
         assert self._stdscr is not None
         height, width = self._stdscr.getmaxyx()
@@ -636,6 +754,12 @@ class ProcessMonitorUI:
             self.tree_mode = not self.tree_mode
             self.selected = 0
             self.status = f"Tree view {'enabled' if self.tree_mode else 'disabled'}"
+        elif key in (curses.KEY_LEFT, ord("-")):
+            self._set_selected_tree_expansion(True)
+        elif key in (curses.KEY_RIGHT, ord("+"), ord("=")):
+            self._set_selected_tree_expansion(False)
+        elif key == ord(" "):
+            self._set_selected_tree_expansion(None)
         elif key in (curses.KEY_F6, ord("s"), ord("S")):
             index = SORT_FIELDS.index(self.sort_field)
             if self.descending:
@@ -685,16 +809,27 @@ class ProcessMonitorUI:
                     self.status = f"Signal failed: {exc}"
         elif key == curses.KEY_F1:
             self.status = (
-                "↑/↓ Select  PgUp/PgDn Scroll  F5 Tree  F6 Sort  "
-                "/ Filter  Esc Clear  K Signal  r Renice  q Quit"
+                "↑/↓ Select  PgUp/PgDn Scroll  F5 Tree  ←/→ Collapse  "
+                "Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     """Run the Linux process monitor."""
     if not sys.platform.startswith("linux"):
         raise SystemExit("Kaiamon's process monitor currently requires Linux /proc")
-    ProcessMonitorUI().run()
+    parser = argparse.ArgumentParser(description="Kaiamon Linux process monitor")
+    parser.add_argument(
+        "--refresh", type=parse_refresh_interval, default=POLL_INTERVAL,
+        metavar="SECONDS",
+        help="process sampling interval in seconds (minimum 0.05; default: 1.0)",
+    )
+    parser.add_argument(
+        "--columns", type=parse_columns, default=DEFAULT_COLUMNS,
+        metavar="LIST", help="ordered comma-separated process columns",
+    )
+    args = parser.parse_args(argv)
+    ProcessMonitorUI(refresh_interval=args.refresh, columns=args.columns).run()
 
 
 if __name__ == "__main__":
