@@ -6,6 +6,8 @@ from typing import Any
 
 from process_actions import SIGNAL_CHOICES, renice_process, signal_process
 
+SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
+
 
 class ProcessInput:
     """Handle keyboard actions and prompts against the owning UI state.
