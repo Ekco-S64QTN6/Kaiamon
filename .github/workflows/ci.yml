@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test and static-analysis tools
+        run: python -m pip install --upgrade pytest ruff mypy
+
+      - name: Compile all Python files
+        run: python -m compileall -q .
+
+      - name: Run regression and PTY tests
+        run: python -m pytest -q
+
+      - name: Lint the active application and tests
+        run: ruff check kaiamon.py process_monitor.py tests
+
+      - name: Type-check the process-monitor core
+        run: mypy process_monitor.py

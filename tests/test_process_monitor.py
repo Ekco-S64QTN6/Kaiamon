@@ -11,6 +11,7 @@ from process_monitor import (
     CpuTimes,
     ProcessCollector,
     ProcessInfo,
+    ProcessSnapshot,
     ProcessMonitorUI,
     cpu_usage,
     filter_processes,
@@ -259,3 +260,51 @@ def test_cpu_meter_renders_bounded_per_core_bar() -> None:
     assert ProcessMonitorUI._meter(50.0, 4) == "[██  ]"
     assert ProcessMonitorUI._meter(150.0, 3) == "[███]"
     assert ProcessMonitorUI._meter(-1.0, 3) == "[   ]"
+
+
+def test_signal_action_requires_explicit_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = _proc(321, 1, "tester", "worker")
+    snapshot = ProcessSnapshot(processes=(process,))
+
+    class FakeCollector:
+        def get_snapshot(self) -> ProcessSnapshot:
+            return snapshot
+
+    ui = ProcessMonitorUI()
+    ui.collector = FakeCollector()  # type: ignore[assignment]
+    prompts = iter(("1", "n"))
+    monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(prompts))
+    signal_calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        "process_monitor.signal_process",
+        lambda pid, signum: signal_calls.append((pid, signum)),
+    )
+
+    ui._handle_key(ord("K"))
+
+    assert signal_calls == []
+    assert ui.status == "TERM cancelled for PID 321"
+
+
+def test_signal_action_runs_only_after_yes_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = _proc(321, 1, "tester", "worker")
+    snapshot = ProcessSnapshot(processes=(process,))
+
+    class FakeCollector:
+        def get_snapshot(self) -> ProcessSnapshot:
+            return snapshot
+
+    ui = ProcessMonitorUI()
+    ui.collector = FakeCollector()  # type: ignore[assignment]
+    prompts = iter(("2", "Y"))
+    monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(prompts))
+    signal_calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        "process_monitor.signal_process",
+        lambda pid, signum: signal_calls.append((pid, signum)),
+    )
+
+    ui._handle_key(ord("K"))
+
+    assert signal_calls == [(321, int(signal.SIGKILL))]
+    assert ui.status == "Sent KILL to PID 321"

@@ -59,12 +59,12 @@ CPU utilization and memory utilization meters appear above the table. Compact pe
 | `/` | Filter by PID, user, or command substring |
 | `Esc` | Clear the filter |
 | `t` or `F5` | Toggle parent/child tree view |
-| `K` | Choose and send TERM, KILL, INT, or HUP to the selected process |
+| `K` | Choose TERM, KILL, INT, or HUP for the selected process, then confirm with `y` (default is no) |
 | `r` | Set the selected process nice value (-20 through 19) |
 | `F1` | Show the keybinding summary in the status line |
 | `q` | Quit |
 
-Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit; `KILL` is available but should be used only when a graceful termination is not appropriate.
+Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation; declining it leaves the process untouched. `KILL` should be used only when a graceful termination is not appropriate.
 
 ## Configuration
 
@@ -113,7 +113,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Optional checks when installed/configured:
+The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Linux PTY integration tests verify terminal attributes are restored after `q`, SIGTERM, and an uncaught UI exception. GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13. Optional local checks:
 
 ```bash
 python -m ruff check .
