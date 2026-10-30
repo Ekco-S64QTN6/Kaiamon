@@ -16,13 +16,14 @@ Kaiamon is being refocused as a Linux htop-style process monitor. The legacy pin
 - [x] Require default-no confirmation before sending TERM, KILL, INT, or HUP; report cancellation and permission errors in the status line.
 - [x] Add Linux PTY integration tests verifying terminal attributes are restored after `q`, SIGTERM, and an uncaught UI exception.
 - [x] Add GitHub Actions CI for compileall, pytest, Ruff, and Mypy across Python 3.10–3.13; define the lint/type-check scope in `pyproject.toml`.
+- [x] Add launch-time column selection and ordering with `--columns`, plus a validated process-sampling interval with `--refresh`.
+- [x] Add keyboard-driven process-tree collapse and expansion with retained collapsed PID state across samples.
 
 ## Next
 
-1. Add configurable columns, configurable refresh rate, and tree collapse/expand.
-2. Expand PTY coverage to Ctrl-C, startup failures, resize handling, and action-prompt exceptions.
-3. Strengthen static typing and lint coverage as the process monitor is split into smaller modules.
-4. Consider optional secondary panels for legacy ping/service/thermal/log telemetry without reducing process-table space or polling responsiveness.
+1. Expand PTY coverage to Ctrl-C, startup failures, resize handling, and action-prompt exceptions.
+2. Strengthen static typing and lint coverage as the process monitor is split into smaller modules.
+3. Consider optional secondary panels for legacy ping/service/thermal/log telemetry without reducing process-table space or polling responsiveness.
 
 ## Later / explicitly deferred
 
