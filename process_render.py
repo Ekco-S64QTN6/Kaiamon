@@ -69,20 +69,21 @@ class ProcessRenderer:
             + f"  Filter:{ui.filter_query or '—'}"
         )
         ui._put(2, 0, mode[:width], curses.color_pair(3))
-        fixed_width = sum(
-            COLUMN_WIDTHS[column]
-            for column in ui.columns if column != "COMMAND"
-        )
-        spaces = max(0, len(ui.columns) - 1)
-        command_is_last = bool(ui.columns and ui.columns[-1] == "COMMAND")
-        header_command_width = max(1, width - 1 - fixed_width - spaces) if command_is_last else COLUMN_WIDTHS["COMMAND"]
+        table_width = sum(COLUMN_WIDTHS[column] for column in ui.columns)
+        table_width += max(0, len(ui.columns) - 1)
+        max_scroll = max(0, table_width - width)
+        ui.horizontal_scroll = min(max(0, ui.horizontal_scroll), max_scroll)
+        horizontal_scroll = ui.horizontal_scroll
+
         header_cells = []
         for column in ui.columns:
-            cell_width = header_command_width if column == "COMMAND" else COLUMN_WIDTHS[column]
+            cell_width = COLUMN_WIDTHS[column]
             alignment = "<" if column == "COMMAND" else ">"
-            header_cells.append(f"{COLUMN_LABELS[column]:{alignment}{cell_width}}")
+            label = COLUMN_LABELS[column][:cell_width]
+            header_cells.append(f"{label:{alignment}{cell_width}}")
+        header_line = " ".join(header_cells)
         ui._put(
-            3, 0, " ".join(header_cells)[:width],
+            3, 0, header_line[horizontal_scroll:horizontal_scroll + width],
             curses.A_REVERSE | curses.A_BOLD,
         )
 
@@ -120,15 +121,15 @@ class ProcessRenderer:
                 indent = "  " * min(depth, 6) + marker + " "
                 target = "COMMAND" if "COMMAND" in values else ("PID" if "PID" in values else ui.columns[0])
                 values[target] = indent + values[target]
-            command_width = (
-                max(1, width - 1 - len(indent) - fixed_width - spaces)
-                if command_is_last else COLUMN_WIDTHS["COMMAND"]
-            )
             cells = []
             for column in ui.columns:
-                cell_width = command_width if column == "COMMAND" else COLUMN_WIDTHS[column]
-                alignment = "<" if column == "COMMAND" else (">" if column in RIGHT_ALIGNED_COLUMNS else "<")
-                cells.append(f"{values[column]:{alignment}{cell_width}}")
+                cell_width = COLUMN_WIDTHS[column]
+                alignment = (
+                    "<" if column == "COMMAND"
+                    else (">" if column in RIGHT_ALIGNED_COLUMNS else "<")
+                )
+                cell_value = str(values[column])[:cell_width]
+                cells.append(f"{cell_value:{alignment}{cell_width}}")
             line = " ".join(cells)
             attr = (
                 curses.color_pair(5)
@@ -136,12 +137,12 @@ class ProcessRenderer:
             )
             if proc.state == "Z":
                 attr = curses.color_pair(4)
-            ui._put(screen_y, 0, line[:width], attr)
+            ui._put(screen_y, 0, line[horizontal_scroll:horizontal_scroll + width], attr)
         footer_y = height - 2
         ui._put(footer_y, 0, ui.status[:width], curses.color_pair(2))
         ui._put(
             height - 1, 0,
-            f"{len(rows)} processes  |  q Quit  ↑/↓ Select  PgUp/PgDn Scroll"[:width],
+            f"{len(rows)} processes  |  q Quit  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns"[:width],
             curses.A_DIM,
         )
         screen.refresh()
