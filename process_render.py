@@ -87,7 +87,7 @@ class ProcessRenderer:
         )
 
         rows = ui._visible(snapshot)
-        filtered = filter_processes(snapshot.processes, ui.filter_query)
+        filtered = ui._filtered_processes(snapshot)
         filtered_pids = {process.pid for process in filtered}
         child_pids = {
             process.ppid for process in filtered
