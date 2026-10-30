@@ -37,10 +37,29 @@ if mode == 'exception':
         time.sleep(0.25)  # Let the parent observe cbreak before raising.
         raise RuntimeError('deliberate PTY restoration test')
     ui._draw = fail
+elif mode == 'action_prompt_exception':
+    from types import SimpleNamespace
+    import curses
+
+    ui._selected_process = lambda: SimpleNamespace(pid=123)
+
+    def fail_prompt(_prompt):
+        curses.echo()
+        curses.curs_set(1)
+        raise RuntimeError('deliberate action-prompt restoration test')
+
+    ui._prompt = fail_prompt
+
+    def trigger_action(_snapshot):
+        import time
+        time.sleep(0.25)  # Let the parent observe cbreak before triggering the prompt.
+        ui._handle_key(ord('K'))
+
+    ui._draw = trigger_action
 ui.run()
 """
     env = os.environ.copy()
-    env["TERM"] = "xterm-256color"
+    env["TERM"] = "kaiamon-invalid-term" if mode == "startup_failure" else "xterm-256color"
     env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     process = subprocess.Popen(
         [sys.executable, "-c", script, mode],
@@ -106,6 +125,68 @@ def test_curses_restores_terminal_after_sigterm() -> None:
 
 def test_curses_restores_terminal_after_uncaught_ui_exception() -> None:
     process, master_fd, slave_fd, original = _start_in_pty("exception")
+    try:
+        _wait_until_cbreak(process, slave_fd)
+        _assert_restored(process, slave_fd, original, expected_code=1)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        os.close(master_fd)
+        os.close(slave_fd)
+
+
+
+def test_curses_restores_terminal_after_ctrl_c() -> None:
+    process, master_fd, slave_fd, original = _start_in_pty("ctrl_c")
+    try:
+        _wait_until_cbreak(process, slave_fd)
+        # A terminal's Ctrl-C character is delivered to the foreground job as SIGINT.
+        process.send_signal(signal.SIGINT)
+        _assert_restored(process, slave_fd, original, expected_code=0)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        os.close(master_fd)
+        os.close(slave_fd)
+
+
+def test_curses_startup_failure_leaves_terminal_attributes_unchanged() -> None:
+    process, master_fd, slave_fd, original = _start_in_pty("startup_failure")
+    try:
+        _assert_restored(process, slave_fd, original, expected_code=1)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        os.close(master_fd)
+        os.close(slave_fd)
+
+
+def test_curses_survives_terminal_window_resize() -> None:
+    process, master_fd, slave_fd, original = _start_in_pty("resize")
+    try:
+        _wait_until_cbreak(process, slave_fd)
+        for rows, columns in ((6, 50), (24, 100)):
+            fcntl.ioctl(
+                slave_fd, termios.TIOCSWINSZ,
+                struct.pack("HHHH", rows, columns, 0, 0),
+            )
+            process.send_signal(signal.SIGWINCH)
+            time.sleep(0.15)
+        os.write(master_fd, b"q")
+        _assert_restored(process, slave_fd, original, expected_code=0)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        os.close(master_fd)
+        os.close(slave_fd)
+
+
+def test_curses_restores_terminal_after_action_prompt_exception() -> None:
+    process, master_fd, slave_fd, original = _start_in_pty("action_prompt_exception")
     try:
         _wait_until_cbreak(process, slave_fd)
         _assert_restored(process, slave_fd, original, expected_code=1)
