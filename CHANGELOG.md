@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Extract process-table renderer
+
+- Move snapshot-driven process table, meter, header, and row rendering into `process_render.py`.
+- Keep all curses operations on the main thread; the UI delegates each frozen snapshot to the renderer.
+- Add a regression test for the UI-to-renderer boundary and include the module in Ruff/Mypy CI.
+
 ## Unreleased — Isolate process actions from the curses UI
 
 - Move PID/nice/signal validation and process-control syscalls into curses-independent `process_actions.py`.
