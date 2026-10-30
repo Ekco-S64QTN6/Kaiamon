@@ -98,7 +98,7 @@ The previous ping, systemd-service, thermal, and journal collectors are preserve
 
 ## Comparison with htop
 
-**Supported in Kaiamon:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU percentages; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display; signal selection; renice; terminal keyboard navigation.
+**Supported in Kaiamon:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display; signal selection; renice; terminal keyboard navigation.
 
 **Different from htop:** Kaiamon currently reads Linux `/proc` directly and is Linux-only; it uses a small fixed set of columns and source-level polling defaults; tree view is a flattened hierarchy without collapse controls; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
 
