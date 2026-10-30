@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Expanded terminal recovery coverage
+
+- Add PTY integration tests for Ctrl-C/SIGINT, curses startup failure, terminal resizing, and exceptions during process-action prompts.
+
 ## Unreleased — Configurable process table and tree navigation
 
 - Add `--columns` to select and reorder visible process-table columns at launch.
