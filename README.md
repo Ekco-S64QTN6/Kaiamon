@@ -1,181 +1,133 @@
-<div align="center">
+# Kaiamon
 
-# ⚡ Kaiamon
+Kaiamon is a Linux terminal process monitor with an **htop-style, live process table**. It reads process and system metrics from \`/proc\`, updates them in a background collector, and renders immutable snapshots through a curses interface. The current implementation focuses on the process-monitor core rather than the former multi-panel system dashboard.
 
-**Cyberpunk curses system companion for Linux workstations**
+## Status
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-A31F34?style=flat-square)](LICENSE)
-[![Platform: Linux](https://img.shields.io/badge/platform-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)](https://www.kernel.org/)
-[![Curses TUI](https://img.shields.io/badge/interface-curses%20TUI-00CED1?style=flat-square)](#)
-[![Code Style](https://img.shields.io/badge/code%20style-PEP%208-000000?style=flat-square)](#)
+The first process-monitor milestone is implemented: live process enumeration, delta-based CPU usage, memory and CPU meters, sorting, text filtering, a parent/child tree, and basic signal/renice actions. See [ROADMAP.md](ROADMAP.md) for what remains before this should be considered a feature-complete htop replacement.
 
-<br>
+## Requirements
 
-*A standalone terminal dashboard that wraps system logs, hardware thermals, service health,*
-*and network latency into a single pane — optimized for 80×24 tiled layouts.*
+- Linux with a mounted \`/proc\` filesystem
+- Python 3.10 or newer
+- A terminal with curses support (the standard Python \`curses\` module)
 
-</div>
+The process monitor itself uses only the Python standard library. It does not require root to list processes, though permissions can restrict command lines and process actions. The archived dashboard in \`legacy_dashboard.py\` retains its previous optional \`psutil\` and \`pynvml\` dependencies and is not started by the process-monitor entry point.
 
----
+## Installation
 
-```
-╭──── PINGS (MS) ────╮╭─── SERVICES ───╮╭──── THERMALS ────╮
-│ Discord    32ms ▅█▆ ││ ollama   ● 2.1%││ CPU Temp: 48.2°C │
-│ Ollama      1ms ▂▃█ ││ kaiacrd  ● 0.3%││ GPU Temp: 52°C   │
-│ Bluesky   128ms █▇▅ ││ NetMgr   ● 0.0%││ CPU Power: 42 W  │
-│ DNS 1.1.1   12ms ▄▅ ││                 ││ Split-Lock: 0    │
-╰─────────────────────╯╰─────────────────╯╰──────────────────╯
-╭─── SYSTEM LOGS ─ LPS: 2.4 [■■■■□□□□□□] ─ Filter: All ─────╮
-│ 22:15:36 systemd: Started FireDragon browser.               │
-│ 22:15:44 flatpak: Sandbox created for app.                  │
-│ 22:15:51 kernel: usb 1-3: new device connected              │
-╰──── [Q]uit ╭─╮ [C]lear ╭─╮ [P]ause ╭─╮ [F]ilter ──────────╯
-```
-
----
-
-## 📦 Installation
-
-```bash
+\`\`\`bash
 git clone https://github.com/Ekco-S64QTN6/Kaiamon.git
 cd Kaiamon
-pip install psutil
-pip install pynvml  # optional — for NVIDIA GPU monitoring
-```
-
-> **Dependencies:** `psutil` (required) and `pynvml` (optional). No frameworks, no config files — just one Python script.
-
-## 🚀 Usage
-
-```bash
 python3 kaiamon.py
-```
+\`\`\`
 
-### Keyboard Controls
+For a source checkout, no package installation is required. Run it in a terminal at least 60 columns wide and 8 rows high; a larger terminal is recommended.
+
+## Usage
+
+\`\`\`bash
+python3 kaiamon.py
+\`\`\`
+
+The process table shows:
+
+| Column | Meaning |
+|---|---|
+| \`PID\` | Process ID |
+| \`USER\` | Effective user from \`/proc/<pid>/status\` |
+| \`PRI\` / \`NI\` | Scheduler priority and nice value |
+| \`VIRT\` | Virtual address space |
+| \`RES\` | Resident memory |
+| \`SHR\` | Shared resident pages from \`/proc/<pid>/statm\` |
+| \`S\` | Process state |
+| \`CPU%\` | CPU use calculated from process and system counter deltas |
+| \`MEM%\` | Resident memory as a percentage of physical memory |
+| \`TIME+\` | Accumulated process CPU time |
+| \`COMMAND\` | Command line, falling back to the process name when empty |
+
+CPU utilization and memory utilization meters appear above the table. Per-core CPU percentages are shown beside the aggregate CPU meter (up to eight cores in the compact header). Processes that disappear or become inaccessible while sampling are skipped rather than terminating the collector.
+
+## Keyboard controls
 
 | Key | Action |
-|:---:|--------|
-| `Q` | Quit — cleanly restores terminal |
-| `C` | Clear log buffer and LPS history |
-| `P` | Pause / resume log ingestion |
-| `F` | Cycle filter: All → Network → Hardware |
-| `R` | Force full redraw |
+|---|---|
+| \`↑\` / \`↓\` or \`j\` / \`k\` | Move selection |
+| \`Page Up\` / \`Page Down\` | Scroll by ten rows |
+| \`Home\` / \`End\` | Select first / last process |
+| \`s\` or \`F6\` | Cycle sort direction and column (CPU, MEM, PID, USER, TIME, COMMAND) |
+| \`/\` | Filter by PID, user, or command substring |
+| \`Esc\` | Clear the filter |
+| \`t\` or \`F5\` | Toggle parent/child tree view |
+| \`K\` | Choose and send TERM, KILL, INT, or HUP to the selected process |
+| \`r\` | Set the selected process nice value (-20 through 19) |
+| \`F1\` | Show the keybinding summary in the status line |
+| \`q\` | Quit |
 
----
+Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit; \`KILL\` is available but should be used only when a graceful termination is not appropriate.
 
-## ✨ Features
+## Configuration
 
-### 📡 Network Latency Sparklines
-Real-time ping monitoring with rolling 10-point Unicode sparklines (`▂▃▄▅▆▇█`):
+There is no configuration file or environment-variable interface yet. The process poll interval defaults to one second and is defined by \`POLL_INTERVAL\` in \`process_monitor.py\`. The UI refresh interval is \`FRAME_INTERVAL_MS\`. These are source-level defaults for now.
 
-| Target | Method | Purpose |
-|--------|--------|---------|
-| Discord | HTTP HEAD | Gateway API latency |
-| Ollama | HTTP HEAD | Local inference server |
-| Bluesky | HTTP HEAD | BSky API endpoint |
-| 1.1.1.1 | TCP socket | Cloudflare DNS / internet health |
+## Architecture
 
-### 🔧 Service Watchdog
-Systemd service monitoring with `psutil` process-scan fallback:
-- Live status indicator (● green / yellow / red)
-- Per-service CPU % and memory usage
-- Restart count tracking (surfaces silent crashes)
-- Monitored: `ollama`, `kaiacord`, `NetworkManager`
+\`\`\`text
+/proc (stat, meminfo, <pid>/stat, status, statm, cmdline)
+                         |
+                         v
+               ProcessCollector thread
+                 - /proc reads only
+                 - per-collector lock
+                 - CPU deltas per PID
+                         |
+                         v
+                frozen ProcessSnapshot
+                         |
+                         v
+                ProcessMonitorUI
+                 - main thread only
+                 - curses rendering/input
+                 - sort/filter/tree presentation
+                 - validated process actions
+\`\`\`
 
-### 🌡️ Hardware Thermals & Limits
-Surfaces metrics that `btop` doesn't show:
+\`ProcessCollector\` owns the polling thread, prior CPU counters, and its published snapshot. It skips common process races (\`ENOENT\`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen \`ProcessSnapshot\`, and all curses calls remain in the main thread. \`curses.wrapper\` owns terminal-mode setup/restoration, while the UI stops its collector in a \`finally\` block.
 
-| Metric | Source |
-|--------|--------|
-| CPU Tctl / Tccd1 | `k10temp` sysfs or `psutil` fallback |
-| CPU Power Draw | RAPL (Intel + AMD) or estimation |
-| CPU Throttling | Kernel `thermal_throttle` sysfs counters |
-| GPU Temp / Power / Fan | `pynvml` → `nvidia-smi` → degraded |
-| GPU VRAM | `pynvml` → `nvidia-smi` |
-| Split-Lock Events | Kernel log parsing with deduplication |
+The previous ping, systemd-service, thermal, and journal collectors are preserved in \`legacy_dashboard.py\` for reference. They are not launched by the new process-centric entry point and will be reconsidered as optional secondary panels only after the process core has matured.
 
-### 📜 Filtered System Logs
-- Streamed from `journalctl` with Ollama noise filtered out
-- **Severity coloring** — 🔴 Error 🟡 Warning 🟢 Success ⚪ Info
-- **Filter modes** — All / Network-only / Hardware-only
-- **Pause mode** — Freeze log ingestion for reading
-- **Adaptive LPS bar** — Visualizes log flood rate with rolling normalization
+## Comparison with htop
 
----
+**Supported in Kaiamon:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU percentages; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display; signal selection; renice; terminal keyboard navigation.
 
-## 🏗️ Architecture
+**Different from htop:** Kaiamon currently reads Linux \`/proc\` directly and is Linux-only; it uses a small fixed set of columns and source-level polling defaults; tree view is a flattened hierarchy without collapse controls; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
 
-Kaiamon follows a **snapshot-based rendering** architecture with strict thread ownership boundaries:
+**Not yet implemented:** full htop setup/configuration screens, sortable column reordering, process/thread toggles, interactive tree collapse, CPU affinity, I/O and disk/network meters, GPU process metrics, custom color schemes, cross-platform backends, and a comprehensive interactive action-confirmation workflow. Kaiamon is htop-style, not yet a drop-in feature-equivalent replacement.
 
-```
- ┌─────────────┐  ┌────────────────┐  ┌──────────────────┐  ┌─────────────┐
- │    Ping      │  │    Service     │  │    Telemetry     │  │     Log     │
- │  Collector   │  │   Collector    │  │    Collector     │  │  Collector  │
- │ (HTTP/TCP)   │  │ (systemctl)    │  │ (sysfs/NVML)    │  │ (select())  │
- └──────┬───────┘  └──────┬────────┘  └───────┬──────────┘  └──────┬──────┘
-        │                 │                    │                    │
-        └────────┬────────┴────────────────────┴────────────┬──────┘
-                 │                                          │
-          ┌──────┴──────────────────────────────────────────┴──────┐
-          │                   CollectorManager                     │
-          │              take_snapshot() → frozen dataclass         │
-          └────────────────────────┬───────────────────────────────┘
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │       KaiamonSnapshot       │
-                    │   @dataclass(frozen=True)    │
-                    └──────────────┬──────────────┘
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │         KaiamonUI           │
-                    │   (main thread — curses)     │
-                    └─────────────────────────────┘
-```
+## Testing
 
-**Key principles:**
-- Collectors own their data — write behind per-collector locks
-- UI reads only from **immutable snapshots** — never touches collector state
-- `curses` lives exclusively in the main thread
-- Terminal is **always** restored: `Q`, `Ctrl-C`, `SIGTERM`, uncaught exceptions
+Run the synthetic test suite without requiring root or a live host process list:
 
----
+\`\`\`bash
+python -m compileall -q .
+python -m pytest -q
+\`\`\`
 
-## 🖥️ Hardware Compatibility
+The fixtures create small \`/proc\`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Optional checks when installed/configured:
 
-| Component | Status | Notes |
-|-----------|:------:|-------|
-| AMD Ryzen (k10temp) | ✅ | Direct sysfs reads |
-| Intel (coretemp) | ✅ | Via `psutil` fallback |
-| NVIDIA GPU (pynvml) | ✅ | Preferred — no subprocess overhead |
-| NVIDIA GPU (nvidia-smi) | ✅ | Automatic fallback |
-| AMD GPU (amdgpu) | ⚠️ | Basic hwmon support |
-| CPU Power (RAPL) | ✅ | Intel + AMD powercap paths |
-| CPU Power (hwmon) | ✅ | Ryzen 7000/9000 via `power1_input` |
-| Thermal Throttle | ✅ | Kernel sysfs + heuristic fallback |
+\`\`\`bash
+python -m ruff check .
+python -m mypy .
+\`\`\`
 
-> **Target system:** Ryzen 9600X + RTX 3060, but works on any Linux box with systemd.
+## Contributing
 
----
+Keep \`/proc\` access inside collectors and keep curses calls on the main thread. New collector output should be copied into frozen snapshot dataclasses before the UI sees it. Add fixture-based regression tests for parsing and race conditions; do not make the test suite depend on the host's live process list or privileged actions. Run the full test suite and relevant static checks before opening a pull request.
 
-## 🧩 Desktop Layout
+## Roadmap
 
-Kaiamon is designed for the bottom-right quadrant of a tiled terminal grid:
+See [ROADMAP.md](ROADMAP.md) for planned work and current limitations.
 
-```
-┌───────────────────────────┬───────────────────────────┐
-│                           │                           │
-│     btop (Top-Left)       │   Kaiacord (Top-Right)    │
-│                           │                           │
-├───────────────────────────┼───────────────────────────┤
-│                           │                           │
-│   cmatrix (Bottom-Left)   │  Kaiamon (Bottom-Right)   │
-│                           │                           │
-└───────────────────────────┴───────────────────────────┘
-```
+## License
 
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+Kaiamon is licensed under the [MIT License](LICENSE).
