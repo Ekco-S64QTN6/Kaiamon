@@ -30,7 +30,7 @@ For a source checkout, no package installation is required. Run it in a terminal
 python3 kaiamon.py
 ```
 
-The process table shows:
+The process table shows these columns by default. Use `--columns` to select a subset and change its order:
 
 | Column | Meaning |
 |---|---|
@@ -62,13 +62,29 @@ CPU utilization and memory utilization meters appear above the table. Compact pe
 | `K` | Choose TERM, KILL, INT, or HUP for the selected process, then confirm with `y` (default is no) |
 | `r` | Set the selected process nice value (-20 through 19) |
 | `F1` | Show the keybinding summary in the status line |
+| `←` / `-` | Collapse the selected tree node's children |
+| `→` / `+` | Expand the selected tree node |
+| `Space` | Toggle collapse/expand for the selected tree node |
 | `q` | Quit |
 
 Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation; declining it leaves the process untouched. `KILL` should be used only when a graceful termination is not appropriate.
 
 ## Configuration
 
-There is no configuration file or environment-variable interface yet. The process poll interval defaults to one second and is defined by `POLL_INTERVAL` in `process_monitor.py`. The UI refresh interval is `FRAME_INTERVAL_MS`. These are source-level defaults for now.
+The process sampling interval defaults to one second. Set it at launch with `--refresh` (seconds; minimum 0.05):
+
+```bash
+python3 kaiamon.py --refresh 0.5
+```
+
+Choose and reorder visible table columns with `--columns`. Column names are comma-separated and case-insensitive; accepted names are `PID`, `USER`, `PRI`, `NI`, `VIRT`, `RES`, `SHR`, `STATE` (or `S`), `CPU` (or `CPU%`), `MEM` (or `MEM%`), `TIME` (or `TIME+`), and `COMMAND`:
+
+```bash
+python3 kaiamon.py --columns PID,USER,CPU,MEM,COMMAND
+python3 kaiamon.py --refresh 0.25 --columns PID,CPU,COMMAND
+```
+
+The sampling interval controls background `/proc` collection. The curses input/render loop remains responsive at its own short frame interval. There is not yet a persistent configuration file or environment-variable interface.
 
 ## Architecture
 
@@ -100,9 +116,9 @@ The previous ping, systemd-service, thermal, and journal collectors are preserve
 
 **Supported in Kaiamon:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display; signal selection; renice; terminal keyboard navigation.
 
-**Different from htop:** Kaiamon currently reads Linux `/proc` directly and is Linux-only; it uses a small fixed set of columns and source-level polling defaults; tree view is a flattened hierarchy without collapse controls; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
+**Different from htop:** Kaiamon currently reads Linux `/proc` directly and is Linux-only; columns and the sampling interval are configurable at launch rather than through a setup screen; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
 
-**Not yet implemented:** full htop setup/configuration screens, sortable column reordering, process/thread toggles, interactive tree collapse, CPU affinity, I/O and disk/network meters, GPU process metrics, custom color schemes, cross-platform backends, and a comprehensive interactive action-confirmation workflow. Kaiamon is htop-style, not yet a drop-in feature-equivalent replacement.
+**Not yet implemented:** full htop setup/configuration screens, interactive column-width editing, process/thread toggles, CPU affinity, I/O and disk/network meters, GPU process metrics, custom color schemes, cross-platform backends, and a comprehensive interactive action-confirmation workflow. Kaiamon is htop-style, not yet a drop-in feature-equivalent replacement.
 
 ## Testing
 
