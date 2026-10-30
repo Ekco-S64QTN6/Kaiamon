@@ -518,3 +518,18 @@ def test_invalid_signal_selection_never_calls_signal_syscall(
     ui.input.handle_key(ui, ord("K"))
 
     assert ui.status.startswith("Signal failed:")
+
+
+def test_input_controller_scrolls_process_table_horizontally() -> None:
+    ui = ProcessMonitorUI()
+
+    ui.input.handle_key(ui, ord("]"))
+    assert ui.horizontal_scroll == 8
+    assert ui.status == "Process table shifted right"
+
+    ui.input.handle_key(ui, ord("["))
+    assert ui.horizontal_scroll == 0
+    assert ui.status == "Process table shifted left"
+
+    ui.input.handle_key(ui, ord("["))
+    assert ui.horizontal_scroll == 0
