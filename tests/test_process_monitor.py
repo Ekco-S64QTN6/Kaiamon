@@ -433,3 +433,88 @@ def test_input_controller_owns_prompt_and_tree_expansion() -> None:
     assert callable(ProcessInput.prompt)
     assert callable(ProcessInput.set_selected_tree_expansion)
     assert callable(ProcessInput.handle_key)
+
+
+def test_input_controller_navigation_sort_and_filter() -> None:
+    snapshot = ProcessSnapshot(processes=(
+        _proc(10, 1, "tester", "worker-a", cpu=10),
+        _proc(20, 1, "tester", "worker-b", cpu=20),
+    ))
+
+    class FakeCollector:
+        def get_snapshot(self) -> ProcessSnapshot:
+            return snapshot
+
+    ui = ProcessMonitorUI()
+    ui.collector = FakeCollector()  # type: ignore[assignment]
+    ui.input.handle_key(ui, curses.KEY_DOWN)
+    assert ui.selected == 1
+    ui.input.handle_key(ui, curses.KEY_HOME)
+    assert ui.selected == 0
+    ui.input.handle_key(ui, curses.KEY_END)
+    assert ui.selected == 1
+    ui.input.handle_key(ui, curses.KEY_F6)
+    assert ui.descending is False
+    ui.input.handle_key(ui, curses.KEY_F6)
+    assert ui.sort_field == "MEM"
+    ui._prompt = lambda _prompt: "worker-b"  # type: ignore[method-assign]
+    ui.input.handle_key(ui, ord("/"))
+    assert ui.filter_query == "worker-b"
+    assert ui.selected == ui.scroll == 0
+    ui.input.handle_key(ui, 27)
+    assert ui.filter_query == ""
+
+
+def test_input_prompt_restores_echo_and_cursor_after_read_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from process_input import ProcessInput
+
+    class FakeScreen:
+        def getmaxyx(self) -> tuple[int, int]:
+            return (10, 80)
+
+        def addnstr(self, *_args: object) -> None:
+            pass
+
+        def refresh(self) -> None:
+            pass
+
+        def getstr(self, *_args: int) -> bytes:
+            raise curses.error("input interrupted")
+
+    ui = ProcessMonitorUI()
+    ui._stdscr = FakeScreen()
+    cursor_calls: list[int] = []
+    echo_calls: list[str] = []
+    monkeypatch.setattr("process_input.curses.echo", lambda: echo_calls.append("echo"))
+    monkeypatch.setattr("process_input.curses.noecho", lambda: echo_calls.append("noecho"))
+    monkeypatch.setattr("process_input.curses.curs_set", lambda value: cursor_calls.append(value))
+
+    with pytest.raises(curses.error, match="input interrupted"):
+        ProcessInput().prompt(ui, "Filter: ")
+
+    assert echo_calls == ["echo", "noecho"]
+    assert cursor_calls == [1, 0]
+
+
+def test_invalid_signal_selection_never_calls_signal_syscall(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = ProcessSnapshot(processes=(_proc(321, 1, "tester", "worker"),))
+
+    class FakeCollector:
+        def get_snapshot(self) -> ProcessSnapshot:
+            return snapshot
+
+    ui = ProcessMonitorUI()
+    ui.collector = FakeCollector()  # type: ignore[assignment]
+    ui._prompt = lambda _prompt: "9"  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        "process_input.signal_process",
+        lambda *_args: pytest.fail("invalid signal selection reached syscall"),
+    )
+
+    ui.input.handle_key(ui, ord("K"))
+
+    assert ui.status.startswith("Signal failed:")
