@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from process_actions import SIGNAL_CHOICES, renice_process, signal_process
 from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
-from process_render import ProcessRenderer
+from process_render import COLUMN_LABELS, ProcessRenderer
 
 FRAME_INTERVAL_MS = 100
 SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
@@ -23,18 +23,6 @@ DEFAULT_COLUMNS = (
     "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
     "CPU", "MEM", "TIME", "COMMAND",
 )
-COLUMN_LABELS = {
-    "PID": "PID", "USER": "USER", "PRI": "PRI", "NI": "NI",
-    "VIRT": "VIRT", "RES": "RES", "SHR": "SHR", "STATE": "S",
-    "CPU": "CPU%", "MEM": "MEM%", "TIME": "TIME+", "COMMAND": "COMMAND",
-}
-COLUMN_WIDTHS = {
-    "PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7,
-    "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24,
-}
-RIGHT_ALIGNED_COLUMNS = frozenset({
-    "PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME",
-})
 COLUMN_ALIASES = {"CPU%": "CPU", "MEM%": "MEM", "TIME+": "TIME", "S": "STATE"}
 
 
@@ -214,10 +202,13 @@ class ProcessMonitorUI:
                 break
             self._handle_key(key)
 
+    def _filtered_processes(self, snapshot: ProcessSnapshot) -> tuple[ProcessInfo, ...]:
+        return filter_processes(snapshot.processes, self.filter_query)
+
     def _visible(
         self, snapshot: ProcessSnapshot,
     ) -> tuple[tuple[ProcessInfo, int], ...]:
-        filtered = filter_processes(snapshot.processes, self.filter_query)
+        filtered = self._filtered_processes(snapshot)
         if self.tree_mode:
             return tree_processes(
                 filtered, self.sort_field, self.descending, self.collapsed,
