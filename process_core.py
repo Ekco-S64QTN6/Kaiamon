@@ -15,6 +15,7 @@ from typing import Callable, TypedDict
 
 POLL_INTERVAL = 1.0
 
+
 @dataclass(frozen=True)
 class ProcessInfo:
     pid: int
@@ -118,7 +119,6 @@ def cpu_usage(previous: CpuTimes, current: CpuTimes) -> float:
         return 0.0
     busy = max(0, total_delta - max(0, idle_delta))
     return min(100.0, (busy / total_delta) * 100.0)
-
 
 
 class ProcessCollector:
