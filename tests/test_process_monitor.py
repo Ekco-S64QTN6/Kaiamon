@@ -253,3 +253,9 @@ def test_signal_handler_requests_clean_ui_shutdown() -> None:
     ui._running = True
     ui._signal_handler(signal.SIGTERM, None)
     assert ui._running is False
+
+
+def test_cpu_meter_renders_bounded_per_core_bar() -> None:
+    assert ProcessMonitorUI._meter(50.0, 4) == "[██  ]"
+    assert ProcessMonitorUI._meter(150.0, 3) == "[███]"
+    assert ProcessMonitorUI._meter(-1.0, 3) == "[   ]"
