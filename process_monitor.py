@@ -414,13 +414,25 @@ class ProcessMonitorUI:
             "F1 Help  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
         )
         self._stdscr = None
+        self._running = False
 
     def run(self) -> None:
-        self.collector.start()
+        original_sigint = signal.getsignal(signal.SIGINT)
+        original_sigterm = signal.getsignal(signal.SIGTERM)
+        self._running = True
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
         try:
+            self.collector.start()
             curses.wrapper(self._main_loop)
         finally:
+            self._running = False
             self.collector.stop()
+            signal.signal(signal.SIGINT, original_sigint)
+            signal.signal(signal.SIGTERM, original_sigterm)
+
+    def _signal_handler(self, _signum: int, _frame: object) -> None:
+        self._running = False
 
     def _main_loop(self, stdscr) -> None:
         self._stdscr = stdscr
@@ -434,10 +446,11 @@ class ProcessMonitorUI:
         curses.init_pair(3, curses.COLOR_YELLOW, -1)
         curses.init_pair(4, curses.COLOR_RED, -1)
         curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_CYAN)
-        while True:
+        while self._running:
             self._draw(self.collector.get_snapshot())
             key = stdscr.getch()
             if key in (ord("q"), ord("Q")):
+                self._running = False
                 break
             self._handle_key(key)
 
@@ -502,7 +515,7 @@ class ProcessMonitorUI:
         )
         self._put(2, 0, mode[:width], curses.color_pair(3))
         header = (
-            " PID   USER     PRI  NI    VIRT     RES    SHR S   "
+            " PID   USER    PRI  NI    VIRT     RES    SHR S   "
             "CPU%  MEM%   TIME+     COMMAND"
         )
         self._put(3, 0, header[:width], curses.A_REVERSE | curses.A_BOLD)
@@ -520,7 +533,7 @@ class ProcessMonitorUI:
         ):
             screen_y = 4 + view_index
             prefix = "  " * min(depth, 6) + ("↳ " if depth else "")
-            command_room = max(1, width - 76 - len(prefix))
+            command_room = max(1, width - 71 - len(prefix))
             command = (prefix + proc.command).replace("\n", " ")
             line = (
                 f"{proc.pid:>6} {proc.user[:8]:<8} "
