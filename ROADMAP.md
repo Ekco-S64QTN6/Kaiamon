@@ -16,7 +16,8 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 - [x] Add GitHub Actions CI for compileall, pytest, Ruff, and Mypy across Python 3.10–3.13.
 - [x] Add launch-time column selection and ordering with `--columns`, plus a validated process-sampling interval with `--refresh`.
 - [x] Extract immutable process models, typed `/proc` parsers, CPU calculations, and the polling collector into curses-independent `process_core.py`.
-- [x] Extract process-action validation and OS calls into curses-independent `process_actions.py`.\n- [x] Extract keyboard dispatch, tree-expansion commands, and prompts into `process_input.py` while keeping all curses operations on the main thread.
+- [x] Extract process-action validation and OS calls into curses-independent `process_actions.py`.
+- [x] Extract keyboard dispatch, tree-expansion commands, and prompts into `process_input.py` while keeping all curses operations on the main thread.
 
 ## Next
 
