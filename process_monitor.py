@@ -481,19 +481,19 @@ class ProcessMonitorUI:
             screen.refresh()
             return
         cpu_bar = self._meter(
-            snapshot.cpu_percent, max(10, min(24, width - 30)),
+            snapshot.cpu_percent, max(8, min(18, width - 50)),
         )
         self._put(
             0, 0, f"CPU {snapshot.cpu_percent:5.1f}% {cpu_bar}",
             curses.color_pair(1) | curses.A_BOLD,
         )
-        core_count = max(1, min(8, (width - 30) // 8))
+        core_count = max(1, min(8, (width - 32) // 8))
         core_text = " ".join(
-            f"{i}:{value:2.0f}%"
+            f"{i}:{self._meter(value, 3)}"
             for i, value in enumerate(snapshot.per_cpu_percent[:core_count])
         )
         self._put(
-            0, min(width - 1, 30), core_text[:max(0, width - 31)],
+            0, min(width - 1, 32), core_text[:max(0, width - 33)],
             curses.color_pair(2),
         )
         mem_pct = (
