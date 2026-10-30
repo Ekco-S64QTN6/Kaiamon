@@ -134,7 +134,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
 
 Optional local static checks:
 
