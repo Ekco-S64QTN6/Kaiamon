@@ -102,13 +102,14 @@ There is not yet a persistent configuration file or an interactive setup screen.
        +------+----------------+
        |                       |
        v                       v
-process_monitor.py       process_render.py       process_actions.py
-main-thread UI           snapshot renderer        validated syscalls
-input + prompts          curses only              signal and renice
+process_monitor.py       process_render.py       process_input.py       process_actions.py
+main-thread lifecycle    snapshot renderer        keys + prompts          validated syscalls
+state + delegation      curses only              main-thread curses     signal and renice
 ```
 
 - `process_core.py` owns immutable process models, typed `/proc` parsers, CPU-delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
-- `process_monitor.py` owns the main-thread curses lifecycle, input, prompts, and sorting/filtering/tree navigation. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
+- `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
+- `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
 - `process_render.py` owns snapshot-driven process-table and meter rendering. It receives a frozen snapshot and the UI's main-thread drawing surface; it does not access collector state.
 - `process_actions.py` owns validation and the small set of process-control syscalls. It has no curses dependency, making the safety policy independently testable.
 
@@ -138,8 +139,8 @@ The tests cover procfs parsing, delta CPU calculations, process-disappearance ra
 Optional local static checks:
 
 ```bash
-python -m ruff check kaiamon.py process_core.py process_actions.py process_monitor.py tests
-python -m mypy process_core.py process_actions.py process_monitor.py
+python -m ruff check kaiamon.py process_core.py process_actions.py process_render.py process_input.py process_monitor.py tests
+python -m mypy process_core.py process_actions.py process_render.py process_input.py process_monitor.py
 ```
 
 GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13.
