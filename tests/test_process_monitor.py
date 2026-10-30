@@ -247,3 +247,9 @@ def test_ui_stops_collector_when_curses_wrapper_fails(
     with pytest.raises(RuntimeError, match="curses startup failed"):
         ui.run()
     assert calls == ["start", "stop"]
+
+def test_signal_handler_requests_clean_ui_shutdown() -> None:
+    ui = ProcessMonitorUI()
+    ui._running = True
+    ui._signal_handler(signal.SIGTERM, None)
+    assert ui._running is False
