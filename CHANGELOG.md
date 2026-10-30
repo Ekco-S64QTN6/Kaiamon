@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Expand renderer and input regression coverage
+
+- Add focused renderer tests for minimum terminal handling and normal snapshot/footer drawing.
+- Exercise input navigation, sorting, filtering, prompt cleanup on read errors, and invalid signal choices.
+- Keep these tests synthetic and independent of live procfs process state.
+
 ## Unreleased — Extract keyboard input and prompts
 
 - Move key dispatch, tree expansion controls, and interactive prompts into `process_input.py`.
