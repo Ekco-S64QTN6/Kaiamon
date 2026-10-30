@@ -92,8 +92,9 @@ The sampling interval controls background `/proc` collection. The curses input/r
 /proc (stat, meminfo, <pid>/stat, status, statm, cmdline)
                          |
                          v
+               process_core.py
                ProcessCollector thread
-                 - /proc reads only
+                 - /proc parsing and reads
                  - per-collector lock
                  - CPU deltas per PID
                          |
@@ -101,6 +102,7 @@ The sampling interval controls background `/proc` collection. The curses input/r
                 frozen ProcessSnapshot
                          |
                          v
+             process_monitor.py
                 ProcessMonitorUI
                  - main thread only
                  - curses rendering/input
@@ -108,7 +110,7 @@ The sampling interval controls background `/proc` collection. The curses input/r
                  - validated process actions
 ```
 
-`ProcessCollector` owns the polling thread, prior CPU counters, and its published snapshot. It skips common process races (`ENOENT`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen `ProcessSnapshot`, and all curses calls remain in the main thread. The UI handles SIGINT and SIGTERM by exiting its main loop; `curses.wrapper` restores terminal mode on normal exit and exceptions, while the collector is stopped and the original signal handlers are restored in a `finally` block.
+`process_core.py` owns immutable process dataclasses, typed `/proc` parsers, CPU-delta calculations, and `ProcessCollector`. It has no curses dependency and is tested with synthetic procfs fixtures. `process_monitor.py` consumes those snapshots and owns the curses UI, sorting/filtering/tree presentation, launch-time options, and validated process actions. It skips common process races (`ENOENT`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen `ProcessSnapshot`, and all curses calls remain in the main thread. The UI handles SIGINT and SIGTERM by exiting its main loop; `curses.wrapper` restores terminal mode on normal exit and exceptions, while the collector is stopped and the original signal handlers are restored in a `finally` block.
 
 The previous ping, systemd-service, thermal, and journal collectors are preserved in `legacy_dashboard.py` for reference. They are not launched by the new process-centric entry point and will be reconsidered as optional secondary panels only after the process core has matured.
 
@@ -132,13 +134,13 @@ python -m pytest -q
 The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Linux PTY integration tests verify terminal attributes are restored after `q`, Ctrl-C/SIGINT, SIGTERM, a curses startup failure, a terminal resize, an uncaught UI exception, and an action-prompt exception. GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13. Optional local checks:
 
 ```bash
-python -m ruff check .
-python -m mypy .
+python -m ruff check kaiamon.py process_core.py process_monitor.py tests
+python -m mypy process_core.py process_monitor.py
 ```
 
 ## Contributing
 
-Keep `/proc` access inside collectors and keep curses calls on the main thread. New collector output should be copied into frozen snapshot dataclasses before the UI sees it. Add fixture-based regression tests for parsing and race conditions; do not make the test suite depend on the host's live process list or privileged actions. Run the full test suite and relevant static checks before opening a pull request.
+Keep `/proc` access in `process_core.py` collectors and keep curses calls in `process_monitor.py` on the main thread. New collector output should be copied into frozen snapshot dataclasses before the UI sees it. Add fixture-based regression tests for parsing and race conditions; do not make the test suite depend on the host's live process list or privileged actions. Run the full test suite and relevant static checks before opening a pull request.
 
 ## Roadmap
 
