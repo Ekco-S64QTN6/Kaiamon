@@ -102,14 +102,14 @@ There is not yet a persistent configuration file or an interactive setup screen.
        +------+----------------+
        |                       |
        v                       v
-process_monitor.py       process_actions.py
-main-thread curses UI    validated Linux syscalls
-sort/filter/tree         signal and renice only
-render/input             no curses dependency
+process_monitor.py       process_render.py       process_actions.py
+main-thread UI           snapshot renderer        validated syscalls
+input + prompts          curses only              signal and renice
 ```
 
 - `process_core.py` owns immutable process models, typed `/proc` parsers, CPU-delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
-- `process_monitor.py` owns the main-thread curses interface, snapshot presentation, sorting/filtering/tree navigation, and user prompts. The UI reads only frozen `ProcessSnapshot` values; collectors never call curses.
+- `process_monitor.py` owns the main-thread curses lifecycle, input, prompts, and sorting/filtering/tree navigation. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
+- `process_render.py` owns snapshot-driven process-table and meter rendering. It receives a frozen snapshot and the UI's main-thread drawing surface; it does not access collector state.
 - `process_actions.py` owns validation and the small set of process-control syscalls. It has no curses dependency, making the safety policy independently testable.
 
 CPU percentages use per-PID CPU-time deltas divided by system CPU-time deltas and scaled by the number of online cores; they are not lifetime averages. Process start-time ticks guard against PID reuse. Common procfs races (process exit, permission errors, malformed or truncated pseudo-files) are skipped. The curses wrapper restores terminal mode on exit and exceptions; the collector is stopped and original SIGINT/SIGTERM handlers are restored in a `finally` block.
