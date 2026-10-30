@@ -20,9 +20,9 @@ RIGHT_ALIGNED_COLUMNS = frozenset({"PID", "PRI", "NI", "VIRT", "RES", "SHR", "CP
 
 
 class ProcessRenderer:
-"""Render one immutable process snapshot using the UI's main-thread surface."""
+    """Render one immutable process snapshot using the UI main-thread surface."""
 
-def draw(self, ui: Any, snapshot: ProcessSnapshot) -> None:
+    def draw(self, ui: Any, snapshot: ProcessSnapshot) -> None:
         screen = ui._stdscr
         if screen is None:
             return
@@ -85,9 +85,9 @@ def draw(self, ui: Any, snapshot: ProcessSnapshot) -> None:
             3, 0, " ".join(header_cells)[:width],
             curses.A_REVERSE | curses.A_BOLD,
         )
-    
+
         rows = ui._visible(snapshot)
-        filtered = ui._filtered_processes(snapshot)
+        filtered = filter_processes(snapshot.processes, ui.filter_query)
         filtered_pids = {process.pid for process in filtered}
         child_pids = {
             process.ppid for process in filtered
@@ -145,5 +145,3 @@ def draw(self, ui: Any, snapshot: ProcessSnapshot) -> None:
             curses.A_DIM,
         )
         screen.refresh()
-    
-    
