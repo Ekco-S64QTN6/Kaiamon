@@ -19,10 +19,12 @@ Kaiamon is being refocused as a Linux htop-style process monitor. The legacy pin
 - [x] Add launch-time column selection and ordering with `--columns`, plus a validated process-sampling interval with `--refresh`.
 - [x] Add keyboard-driven process-tree collapse and expansion with retained collapsed PID state across samples.
 - [x] Expand Linux PTY coverage to Ctrl-C/SIGINT, curses startup failure, window resizing, and action-prompt exceptions.
+- [x] Extract immutable process models, typed `/proc` parsers, CPU calculations, and the polling collector into curses-independent `process_core.py`.
+- [x] Expand Ruff and Mypy targets to include `process_core.py`; preserve the four-version Python CI matrix.
 
 ## Next
 
-1. Strengthen static typing and lint coverage as the process monitor is split into smaller modules.
+1. Continue splitting curses rendering/input and process-action handling into focused modules, then extend their type-check coverage.
 2. Consider optional secondary panels for legacy ping/service/thermal/log telemetry without reducing process-table space or polling responsiveness.
 
 ## Later / explicitly deferred

@@ -9,18 +9,20 @@ from unittest.mock import patch
 
 import pytest
 
-from process_monitor import (
+from process_core import (
     CpuTimes,
-    DEFAULT_COLUMNS,
     ProcessCollector,
     ProcessInfo,
     ProcessSnapshot,
-    ProcessMonitorUI,
     cpu_usage,
-    filter_processes,
-    parse_columns,
     parse_cpu_times,
     parse_proc_stat,
+)
+from process_monitor import (
+    DEFAULT_COLUMNS,
+    ProcessMonitorUI,
+    filter_processes,
+    parse_columns,
     parse_refresh_interval,
     renice_process,
     signal_process,
