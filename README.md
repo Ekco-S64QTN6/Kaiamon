@@ -46,7 +46,7 @@ The process table shows:
 | `TIME+` | Accumulated process CPU time |
 | `COMMAND` | Command line, falling back to the process name when empty |
 
-CPU utilization and memory utilization meters appear above the table. Per-core CPU percentages are shown beside the aggregate CPU meter (up to eight cores in the compact header). Processes that disappear or become inaccessible while sampling are skipped rather than terminating the collector.
+CPU utilization and memory utilization meters appear above the table. Compact per-core CPU meters appear beside the aggregate CPU meter (up to eight cores in the header). Processes that disappear or become inaccessible while sampling are skipped rather than terminating the collector.
 
 ## Keyboard controls
 
