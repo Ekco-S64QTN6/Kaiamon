@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import curses
 import os
 import signal
 from pathlib import Path
@@ -9,14 +11,17 @@ import pytest
 
 from process_monitor import (
     CpuTimes,
+    DEFAULT_COLUMNS,
     ProcessCollector,
     ProcessInfo,
     ProcessSnapshot,
     ProcessMonitorUI,
     cpu_usage,
     filter_processes,
+    parse_columns,
     parse_cpu_times,
     parse_proc_stat,
+    parse_refresh_interval,
     renice_process,
     signal_process,
     sort_processes,
@@ -308,3 +313,73 @@ def test_signal_action_runs_only_after_yes_confirmation(monkeypatch: pytest.Monk
 
     assert signal_calls == [(321, int(signal.SIGKILL))]
     assert ui.status == "Sent KILL to PID 321"
+
+
+
+def test_tree_view_can_collapse_and_expand_a_subtree() -> None:
+    rows = (
+        _proc(1, 0, "root", "init"),
+        _proc(2, 1, "root", "parent"),
+        _proc(3, 2, "root", "child"),
+        _proc(4, 1, "root", "sibling"),
+    )
+    expanded = tree_processes(rows, "PID", descending=False)
+    collapsed = tree_processes(rows, "PID", descending=False, collapsed={2})
+    assert [(process.pid, depth) for process, depth in expanded] == [
+        (1, 0), (2, 1), (3, 2), (4, 1),
+    ]
+    assert [(process.pid, depth) for process, depth in collapsed] == [
+        (1, 0), (2, 1), (4, 1),
+    ]
+
+
+def test_column_parser_preserves_order_and_accepts_display_aliases() -> None:
+    assert parse_columns("command, pid, CPU%, S, TIME+") == (
+        "COMMAND", "PID", "CPU", "STATE", "TIME",
+    )
+    assert DEFAULT_COLUMNS[-1] == "COMMAND"
+    with pytest.raises(argparse.ArgumentTypeError, match="unsupported column"):
+        parse_columns("PID,NOT_A_COLUMN")
+    with pytest.raises(argparse.ArgumentTypeError, match="duplicates"):
+        parse_columns("PID,pid")
+    with pytest.raises(argparse.ArgumentTypeError, match="empty"):
+        parse_columns("PID,,CPU")
+
+
+def test_refresh_interval_parser_rejects_non_finite_and_too_fast_values() -> None:
+    assert parse_refresh_interval("0.25") == pytest.approx(0.25)
+    with pytest.raises(argparse.ArgumentTypeError, match="at least 0.05"):
+        parse_refresh_interval("0.01")
+    with pytest.raises(argparse.ArgumentTypeError, match="finite"):
+        parse_refresh_interval("nan")
+
+
+def test_ui_accepts_custom_columns_and_refresh_interval() -> None:
+    ui = ProcessMonitorUI(refresh_interval=0.25, columns=("PID", "COMMAND", "CPU"))
+    assert ui.refresh_interval == pytest.approx(0.25)
+    assert ui.collector.poll_interval == pytest.approx(0.25)
+    assert ui.columns == ("PID", "COMMAND", "CPU")
+
+
+def test_tree_keyboard_controls_collapse_expand_and_toggle() -> None:
+    processes = (
+        _proc(10, 1, "tester", "parent"),
+        _proc(11, 10, "tester", "child"),
+    )
+    snapshot = ProcessSnapshot(processes=processes)
+
+    class FakeCollector:
+        def get_snapshot(self) -> ProcessSnapshot:
+            return snapshot
+
+    ui = ProcessMonitorUI()
+    ui.collector = FakeCollector()  # type: ignore[assignment]
+    ui.tree_mode = True
+    ui._handle_key(curses.KEY_LEFT)
+    assert ui.collapsed == {10}
+    assert [(item.pid, depth) for item, depth in ui._visible(snapshot)] == [(10, 0)]
+    ui._handle_key(curses.KEY_RIGHT)
+    assert ui.collapsed == set()
+    assert len(ui._visible(snapshot)) == 2
+    ui._handle_key(ord(" "))
+    assert ui.collapsed == {10}
