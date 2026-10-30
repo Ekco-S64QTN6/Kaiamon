@@ -311,7 +311,8 @@ class ProcessCollector:
                         ) * max(1, len(cpu_samples) - 1) * 100.0
                 current_previous[pid] = (proc_ticks, start_ticks)
                 status = self._read_status(entry / "status")
-                uid_text = status.get("Uid", "0").split()[0]
+                uid_fields = status.get("Uid", "0").split()
+                uid_text = uid_fields[1] if len(uid_fields) > 1 else uid_fields[0]
                 uid = int(uid_text)
                 statm = (entry / "statm").read_text().split()
                 if len(statm) < 3:
