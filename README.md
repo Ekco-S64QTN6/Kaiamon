@@ -129,7 +129,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Linux PTY integration tests verify terminal attributes are restored after `q`, SIGTERM, and an uncaught UI exception. GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13. Optional local checks:
+The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Linux PTY integration tests verify terminal attributes are restored after `q`, Ctrl-C/SIGINT, SIGTERM, a curses startup failure, a terminal resize, an uncaught UI exception, and an action-prompt exception. GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13. Optional local checks:
 
 ```bash
 python -m ruff check .
