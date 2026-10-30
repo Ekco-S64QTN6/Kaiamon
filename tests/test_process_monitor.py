@@ -18,6 +18,7 @@ from process_core import (
     parse_cpu_times,
     parse_proc_stat,
 )
+from process_actions import validate_nice_value, validate_process_target
 from process_monitor import (
     DEFAULT_COLUMNS,
     ProcessMonitorUI,
@@ -28,8 +29,6 @@ from process_monitor import (
     signal_process,
     sort_processes,
     tree_processes,
-    validate_nice_value,
-    validate_process_target,
 )
 
 
@@ -220,17 +219,33 @@ def test_process_action_validation_blocks_pid_one_self_and_bad_nice() -> None:
 
 def test_process_signal_and_renice_call_os_only_after_validation() -> None:
     with (
-        patch("process_monitor.os.getpid", return_value=999),
-        patch("process_monitor.os.kill") as kill,
+        patch("process_actions.os.getpid", return_value=999),
+        patch("process_actions.os.kill") as kill,
     ):
         signal_process(123, int(signal.SIGTERM))
         kill.assert_called_once_with(123, signal.SIGTERM)
     with (
-        patch("process_monitor.os.getpid", return_value=999),
-        patch("process_monitor.os.setpriority") as setpriority,
+        patch("process_actions.os.getpid", return_value=999),
+        patch("process_actions.os.setpriority") as setpriority,
     ):
         renice_process(123, 5)
         setpriority.assert_called_once_with(os.PRIO_PROCESS, 123, 5)
+
+
+def test_invalid_actions_never_reach_operating_system() -> None:
+    with (
+        patch("process_actions.os.getpid", return_value=999),
+        patch("process_actions.os.kill") as kill,
+        patch("process_actions.os.setpriority") as setpriority,
+    ):
+        with pytest.raises(ValueError):
+            signal_process(1, int(signal.SIGTERM))
+        with pytest.raises(ValueError, match="unsupported process signal"):
+            signal_process(123, int(signal.SIGCONT))
+        with pytest.raises(ValueError):
+            renice_process(123, 20)
+        kill.assert_not_called()
+        setpriority.assert_not_called()
 
 
 def test_ui_stops_collector_when_curses_wrapper_fails(

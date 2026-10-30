@@ -9,22 +9,15 @@ from __future__ import annotations
 import argparse
 import curses
 import math
-import os
 import signal
 import sys
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from process_actions import SIGNAL_CHOICES, renice_process, signal_process
 from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
 
 FRAME_INTERVAL_MS = 100
 SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
-SIGNAL_CHOICES = {
-    "1": (signal.SIGTERM, "TERM"),
-    "2": (signal.SIGKILL, "KILL"),
-    "3": (signal.SIGINT, "INT"),
-    "4": (signal.SIGHUP, "HUP"),
-}
-
 DEFAULT_COLUMNS = (
     "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
     "CPU", "MEM", "TIME", "COMMAND",
@@ -156,35 +149,6 @@ def tree_processes(
         if process.pid not in visited:
             visit(process, 0)
     return tuple(result)
-
-
-def validate_process_target(pid: int, *, current_pid: int | None = None) -> None:
-    """Reject invalid and self-targeted process operations."""
-    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 1:
-        raise ValueError("PID must identify a non-system process greater than 1")
-    if current_pid is None:
-        current_pid = os.getpid()
-    if pid == current_pid:
-        raise ValueError("refusing to signal or renice the monitor itself")
-
-
-def validate_nice_value(nice: int) -> int:
-    if isinstance(nice, bool) or not isinstance(nice, int) or not -20 <= nice <= 19:
-        raise ValueError("nice value must be an integer from -20 through 19")
-    return nice
-
-
-def signal_process(pid: int, signum: int) -> None:
-    validate_process_target(pid)
-    allowed = {int(value) for value, _label in SIGNAL_CHOICES.values()}
-    if signum not in allowed:
-        raise ValueError("unsupported process signal")
-    os.kill(pid, signum)
-
-
-def renice_process(pid: int, nice: int) -> None:
-    validate_process_target(pid)
-    os.setpriority(os.PRIO_PROCESS, pid, validate_nice_value(nice))
 
 
 class ProcessMonitorUI:

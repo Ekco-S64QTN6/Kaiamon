@@ -1,18 +1,16 @@
 # Kaiamon
 
-Kaiamon is a Linux terminal process monitor with an **htop-style, live process table**. It reads process and system metrics from `/proc`, updates them in a background collector, and renders immutable snapshots through a curses interface. The current implementation focuses on the process-monitor core rather than the former multi-panel system dashboard.
+Kaiamon is a Linux terminal process monitor inspired by **htop**. It presents a live, sortable and filterable process table in a curses interface, with CPU and memory meters, parent/child navigation, and guarded process controls.
 
-## Status
-
-The first process-monitor milestone is implemented: live process enumeration, delta-based CPU usage, memory and CPU meters, sorting, text filtering, a parent/child tree, and basic signal/renice actions. See [ROADMAP.md](ROADMAP.md) for what remains before this should be considered a feature-complete htop replacement.
+The default application is process-centric. The former ping, systemd, thermal, and journal dashboard remains in `legacy_dashboard.py` for reference; it is not started by the process-monitor entry point.
 
 ## Requirements
 
 - Linux with a mounted `/proc` filesystem
 - Python 3.10 or newer
-- A terminal with curses support (the standard Python `curses` module)
+- A terminal with curses support (the standard-library `curses` module)
 
-The process monitor itself uses only the Python standard library. It does not require root to list processes, though permissions can restrict command lines and process actions. The archived dashboard in `legacy_dashboard.py` retains its previous optional `psutil` and `pynvml` dependencies and is not started by the process-monitor entry point.
+The process monitor uses only the Python standard library. Listing processes does not require root, although Linux permissions may limit visibility of details and process actions.
 
 ## Installation
 
@@ -22,7 +20,7 @@ cd Kaiamon
 python3 kaiamon.py
 ```
 
-For a source checkout, no package installation is required. Run it in a terminal at least 60 columns wide and 8 rows high; a larger terminal is recommended.
+No package installation is required for a source checkout. A terminal at least 60 columns wide and 8 rows high is required; a larger terminal is recommended.
 
 ## Usage
 
@@ -30,7 +28,7 @@ For a source checkout, no package installation is required. Run it in a terminal
 python3 kaiamon.py
 ```
 
-The process table shows these columns by default. Use `--columns` to select a subset and change its order:
+The process table includes:
 
 | Column | Meaning |
 |---|---|
@@ -39,112 +37,120 @@ The process table shows these columns by default. Use `--columns` to select a su
 | `PRI` / `NI` | Scheduler priority and nice value |
 | `VIRT` | Virtual address space |
 | `RES` | Resident memory |
-| `SHR` | Shared resident pages from `/proc/<pid>/statm` |
+| `SHR` | Shared resident pages |
 | `S` | Process state |
-| `CPU%` | CPU use calculated from process and system counter deltas |
+| `CPU%` | CPU use from process and system counter deltas |
 | `MEM%` | Resident memory as a percentage of physical memory |
 | `TIME+` | Accumulated process CPU time |
-| `COMMAND` | Command line, falling back to the process name when empty |
+| `COMMAND` | Command line, or process name when unavailable |
 
-CPU utilization and memory utilization meters appear above the table. Compact per-core CPU meters appear beside the aggregate CPU meter (up to eight cores in the header). Processes that disappear or become inaccessible while sampling are skipped rather than terminating the collector.
+Aggregate CPU and memory meters appear above the table. Up to eight compact per-core CPU meters are shown in the header. Processes that exit or become inaccessible during a sample are skipped.
 
 ## Keyboard controls
 
 | Key | Action |
 |---|---|
 | `↑` / `↓` or `j` / `k` | Move selection |
-| `Page Up` / `Page Down` | Scroll by ten rows |
+| `Page Up` / `Page Down` | Move selection by ten rows |
 | `Home` / `End` | Select first / last process |
-| `s` or `F6` | Cycle sort direction and column (CPU, MEM, PID, USER, TIME, COMMAND) |
+| `s` or `F6` | Cycle sort field and direction (CPU, MEM, PID, USER, TIME, COMMAND) |
 | `/` | Filter by PID, user, or command substring |
 | `Esc` | Clear the filter |
 | `t` or `F5` | Toggle parent/child tree view |
-| `K` | Choose TERM, KILL, INT, or HUP for the selected process, then confirm with `y` (default is no) |
+| `←` / `-` | Collapse the selected tree node |
+| `→` / `+` | Expand the selected tree node |
+| `Space` | Toggle the selected tree node |
+| `K` | Choose TERM, KILL, INT, or HUP; confirm with `y` (default is no) |
 | `r` | Set the selected process nice value (-20 through 19) |
 | `F1` | Show the keybinding summary in the status line |
-| `←` / `-` | Collapse the selected tree node's children |
-| `→` / `+` | Expand the selected tree node |
-| `Space` | Toggle collapse/expand for the selected tree node |
 | `q` | Quit |
 
-Process actions are subject to normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation; declining it leaves the process untouched. `KILL` should be used only when a graceful termination is not appropriate.
+Process actions follow normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
 
 ## Configuration
 
-The process sampling interval defaults to one second. Set it at launch with `--refresh` (seconds; minimum 0.05):
+The background process sampling interval defaults to one second. Set it at launch with `--refresh` (seconds; minimum 0.05):
 
 ```bash
 python3 kaiamon.py --refresh 0.5
 ```
 
-Choose and reorder visible table columns with `--columns`. Column names are comma-separated and case-insensitive; accepted names are `PID`, `USER`, `PRI`, `NI`, `VIRT`, `RES`, `SHR`, `STATE` (or `S`), `CPU` (or `CPU%`), `MEM` (or `MEM%`), `TIME` (or `TIME+`), and `COMMAND`:
+Select and reorder visible columns with `--columns`. Names are comma-separated and case-insensitive. Accepted names are `PID`, `USER`, `PRI`, `NI`, `VIRT`, `RES`, `SHR`, `STATE` (or `S`), `CPU` (or `CPU%`), `MEM` (or `MEM%`), `TIME` (or `TIME+`), and `COMMAND`:
 
 ```bash
 python3 kaiamon.py --columns PID,USER,CPU,MEM,COMMAND
 python3 kaiamon.py --refresh 0.25 --columns PID,CPU,COMMAND
 ```
 
-The sampling interval controls background `/proc` collection. The curses input/render loop remains responsive at its own short frame interval. There is not yet a persistent configuration file or environment-variable interface.
+There is not yet a persistent configuration file or an interactive setup screen.
 
 ## Architecture
 
 ```text
-/proc (stat, meminfo, <pid>/stat, status, statm, cmdline)
-                         |
-                         v
-               process_core.py
-               ProcessCollector thread
-                 - /proc parsing and reads
-                 - per-collector lock
-                 - CPU deltas per PID
-                         |
-                         v
-                frozen ProcessSnapshot
-                         |
-                         v
-             process_monitor.py
-                ProcessMonitorUI
-                 - main thread only
-                 - curses rendering/input
-                 - sort/filter/tree presentation
-                 - validated process actions
+/proc (system and per-PID pseudo-files)
+              |
+              v
+       process_core.py
+       ProcessCollector thread
+       - procfs parsing and sampling
+       - per-collector lock
+       - CPU counter deltas
+              |
+              v
+       frozen ProcessSnapshot
+              |
+       +------+----------------+
+       |                       |
+       v                       v
+process_monitor.py       process_actions.py
+main-thread curses UI    validated Linux syscalls
+sort/filter/tree         signal and renice only
+render/input             no curses dependency
 ```
 
-`process_core.py` owns immutable process dataclasses, typed `/proc` parsers, CPU-delta calculations, and `ProcessCollector`. It has no curses dependency and is tested with synthetic procfs fixtures. `process_monitor.py` consumes those snapshots and owns the curses UI, sorting/filtering/tree presentation, launch-time options, and validated process actions. It skips common process races (`ENOENT`, permission errors, malformed or truncated pseudo-files). CPU percentages are derived from process CPU-time deltas divided by system CPU-time deltas, scaled by the number of online cores; they are not lifetime averages. The UI reads only the frozen `ProcessSnapshot`, and all curses calls remain in the main thread. The UI handles SIGINT and SIGTERM by exiting its main loop; `curses.wrapper` restores terminal mode on normal exit and exceptions, while the collector is stopped and the original signal handlers are restored in a `finally` block.
+- `process_core.py` owns immutable process models, typed `/proc` parsers, CPU-delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
+- `process_monitor.py` owns the main-thread curses interface, snapshot presentation, sorting/filtering/tree navigation, and user prompts. The UI reads only frozen `ProcessSnapshot` values; collectors never call curses.
+- `process_actions.py` owns validation and the small set of process-control syscalls. It has no curses dependency, making the safety policy independently testable.
 
-The previous ping, systemd-service, thermal, and journal collectors are preserved in `legacy_dashboard.py` for reference. They are not launched by the new process-centric entry point and will be reconsidered as optional secondary panels only after the process core has matured.
+CPU percentages use per-PID CPU-time deltas divided by system CPU-time deltas and scaled by the number of online cores; they are not lifetime averages. Process start-time ticks guard against PID reuse. Common procfs races (process exit, permission errors, malformed or truncated pseudo-files) are skipped. The curses wrapper restores terminal mode on exit and exceptions; the collector is stopped and original SIGINT/SIGTERM handlers are restored in a `finally` block.
+
+The design follows two useful htop lessons: keep platform-specific collection behind clean interfaces, and keep UI concerns separate from polling and process control. See the [htop “Going cross-platform” talk](https://htop.dev/assets/static/htop_talk_fosdem2016_hisham.pdf) and [htoprs](https://docs.rs/crate/htoprs/latest/source/README.md), a function-by-function port that treats htop's C implementation as its specification. Kaiamon remains Linux-only today; portability is deliberately deferred.
 
 ## Comparison with htop
 
-**Supported in Kaiamon:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display; signal selection; renice; terminal keyboard navigation.
+**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
-**Different from htop:** Kaiamon currently reads Linux `/proc` directly and is Linux-only; columns and the sampling interval are configurable at launch rather than through a setup screen; process filtering is substring-based; per-core meters are compact and limited to the first eight cores in the header.
+**Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its visible columns and sampling interval are configured at launch; filtering is substring-based; per-core meters are compact and limited to the first eight cores shown.
 
-**Not yet implemented:** full htop setup/configuration screens, interactive column-width editing, process/thread toggles, CPU affinity, I/O and disk/network meters, GPU process metrics, custom color schemes, cross-platform backends, and a comprehensive interactive action-confirmation workflow. Kaiamon is htop-style, not yet a drop-in feature-equivalent replacement.
+**Not yet implemented:** full htop setup/configuration screens, interactive column-width editing, process/thread toggles, CPU affinity, I/O and disk/network meters, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
 
 ## Testing
 
-Run the synthetic test suite without requiring root or a live host process list:
+Run the synthetic regression suite without root or dependence on the host process list:
 
 ```bash
 python -m compileall -q .
 python -m pytest -q
 ```
 
-The fixtures create small `/proc`-like trees and cover parsing, delta CPU calculation, process-disappearance races, immutable snapshot publication, sorting, filtering, tree construction, and process-action validation. Linux PTY integration tests verify terminal attributes are restored after `q`, Ctrl-C/SIGINT, SIGTERM, a curses startup failure, a terminal resize, an uncaught UI exception, and an action-prompt exception. GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13. Optional local checks:
+The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+
+Optional local static checks:
 
 ```bash
-python -m ruff check kaiamon.py process_core.py process_monitor.py tests
-python -m mypy process_core.py process_monitor.py
+python -m ruff check kaiamon.py process_core.py process_actions.py process_monitor.py tests
+python -m mypy process_core.py process_actions.py process_monitor.py
 ```
+
+GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13.
 
 ## Contributing
 
-Keep `/proc` access in `process_core.py` collectors and keep curses calls in `process_monitor.py` on the main thread. New collector output should be copied into frozen snapshot dataclasses before the UI sees it. Add fixture-based regression tests for parsing and race conditions; do not make the test suite depend on the host's live process list or privileged actions. Run the full test suite and relevant static checks before opening a pull request.
+Keep procfs reads in `process_core.py`, process-control validation/syscalls in `process_actions.py`, and all curses operations on the main thread in `process_monitor.py`. Collectors own their mutable state behind per-collector locks and publish frozen snapshots. Add fixture-based tests for parsing, races, and invalid actions; do not rely on live host process data or privileged operations. Run the complete suite and static checks before opening a pull request.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for planned work and current limitations.
+See [ROADMAP.md](ROADMAP.md) for completed milestones, current limitations, and next steps.
 
 ## License
 
