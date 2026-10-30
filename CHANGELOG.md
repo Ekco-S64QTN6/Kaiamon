@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — Separate process core module
+
+- Extract immutable process models, typed procfs parsing, CPU accounting, and the `/proc` polling collector into curses-independent `process_core.py`.
+- Extend Ruff and Mypy coverage to both active process-monitor modules while preserving Python 3.10–3.13 CI.
+
 ## Unreleased — Expanded terminal recovery coverage
 
 - Add PTY integration tests for Ctrl-C/SIGINT, curses startup failure, terminal resizing, and exceptions during process-action prompts.
