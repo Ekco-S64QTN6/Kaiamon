@@ -15,7 +15,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 POLL_INTERVAL = 1.0
 FRAME_INTERVAL_MS = 100
@@ -414,7 +414,7 @@ class ProcessMonitorUI:
         self.status = (
             "F1 Help  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
         )
-        self._stdscr = None
+        self._stdscr: Any = None
         self._running = False
 
     def run(self) -> None:
