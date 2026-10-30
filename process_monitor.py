@@ -673,6 +673,12 @@ class ProcessMonitorUI:
                 )
                 try:
                     signum, label = SIGNAL_CHOICES[choice]
+                    confirmation = self._prompt(
+                        f"Confirm {label} for PID {proc.pid}? [y/N]: "
+                    )
+                    if confirmation.casefold() != "y":
+                        self.status = f"{label} cancelled for PID {proc.pid}"
+                        return
                     signal_process(proc.pid, int(signum))
                     self.status = f"Sent {label} to PID {proc.pid}"
                 except (KeyError, ValueError, OSError, PermissionError) as exc:
