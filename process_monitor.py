@@ -13,9 +13,9 @@ import signal
 import sys
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from process_actions import SIGNAL_CHOICES, renice_process, signal_process
 from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
 from process_render import COLUMN_LABELS, ProcessRenderer
+from process_input import ProcessInput
 
 FRAME_INTERVAL_MS = 100
 SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
@@ -151,6 +151,7 @@ class ProcessMonitorUI:
         self.columns = parse_columns(",".join(columns))
         self.collector = ProcessCollector(poll_interval=self.refresh_interval)
         self.renderer = ProcessRenderer()
+        self.input = ProcessInput()
         self.selected = 0
         self.scroll = 0
         self.sort_field = "CPU"
@@ -260,128 +261,13 @@ class ProcessMonitorUI:
         return rows[self.selected][0]
 
     def _set_selected_tree_expansion(self, collapse: bool | None) -> None:
-        """Collapse, expand, or toggle the selected node in tree mode."""
-        if not self.tree_mode:
-            self.status = "Enable tree view first (t)"
-            return
-        snapshot = self.collector.get_snapshot()
-        rows = self._visible(snapshot)
-        if not rows or self.selected >= len(rows):
-            self.status = "No process selected"
-            return
-        process = rows[self.selected][0]
-        filtered = filter_processes(snapshot.processes, self.filter_query)
-        has_children = any(
-            item.ppid == process.pid and item.pid != process.pid
-            for item in filtered
-        )
-        if not has_children:
-            self.status = f"PID {process.pid} has no visible children"
-            return
-        should_collapse = process.pid not in self.collapsed if collapse is None else collapse
-        if should_collapse:
-            self.collapsed.add(process.pid)
-            self.status = f"Collapsed children of PID {process.pid}"
-        else:
-            self.collapsed.discard(process.pid)
-            self.status = f"Expanded children of PID {process.pid}"
+        self.input.set_selected_tree_expansion(self, collapse)
 
     def _prompt(self, prompt: str) -> str:
-        assert self._stdscr is not None
-        height, width = self._stdscr.getmaxyx()
-        self._put(height - 1, 0, " " * width)
-        self._put(
-            height - 1, 0, prompt[:max(0, width - 1)], curses.A_BOLD,
-        )
-        curses.echo()
-        curses.curs_set(1)
-        self._stdscr.refresh()
-        try:
-            raw = self._stdscr.getstr(
-                height - 1, min(len(prompt), width - 1),
-                max(1, width - len(prompt) - 1),
-            )
-            return raw.decode("utf-8", errors="replace").strip()
-        finally:
-            curses.noecho()
-            curses.curs_set(0)
+        return self.input.prompt(self, prompt)
 
     def _handle_key(self, key: int) -> None:
-        rows = self._visible(self.collector.get_snapshot())
-        if key in (curses.KEY_UP, ord("k")):
-            self.selected = max(0, self.selected - 1)
-        elif key in (curses.KEY_DOWN, ord("j")):
-            self.selected = min(max(0, len(rows) - 1), self.selected + 1)
-        elif key == curses.KEY_PPAGE:
-            self.selected = max(0, self.selected - 10)
-        elif key == curses.KEY_NPAGE:
-            self.selected = min(max(0, len(rows) - 1), self.selected + 10)
-        elif key == curses.KEY_HOME:
-            self.selected = 0
-        elif key == curses.KEY_END:
-            self.selected = max(0, len(rows) - 1)
-        elif key in (curses.KEY_F5, ord("t"), ord("T")):
-            self.tree_mode = not self.tree_mode
-            self.selected = 0
-            self.status = f"Tree view {'enabled' if self.tree_mode else 'disabled'}"
-        elif key in (curses.KEY_LEFT, ord("-")):
-            self._set_selected_tree_expansion(True)
-        elif key in (curses.KEY_RIGHT, ord("+"), ord("=")):
-            self._set_selected_tree_expansion(False)
-        elif key == ord(" "):
-            self._set_selected_tree_expansion(None)
-        elif key in (curses.KEY_F6, ord("s"), ord("S")):
-            index = SORT_FIELDS.index(self.sort_field)
-            if self.descending:
-                self.descending = False
-            else:
-                self.sort_field = SORT_FIELDS[(index + 1) % len(SORT_FIELDS)]
-                self.descending = True
-            self.selected = 0
-            self.status = (
-                f"Sorted by {self.sort_field} "
-                f"{'descending' if self.descending else 'ascending'}"
-            )
-        elif key == ord("/"):
-            self.filter_query = self._prompt("Filter: ")
-            self.selected = self.scroll = 0
-            self.status = "Filter applied; Esc clears it"
-        elif key == 27:
-            self.filter_query = ""
-            self.selected = self.scroll = 0
-            self.status = "Filter cleared"
-        elif key in (ord("r"), ord("R")):
-            proc = self._selected_process()
-            if proc:
-                value = self._prompt(f"Renice PID {proc.pid} to [-20..19]: ")
-                try:
-                    renice_process(proc.pid, int(value))
-                    self.status = f"Reniced PID {proc.pid} to {int(value)}"
-                except (ValueError, OSError, PermissionError) as exc:
-                    self.status = f"Renice failed: {exc}"
-        elif key == ord("K"):
-            proc = self._selected_process()
-            if proc:
-                choice = self._prompt(
-                    f"Signal PID {proc.pid}: 1 TERM  2 KILL  3 INT  4 HUP: "
-                )
-                try:
-                    signum, label = SIGNAL_CHOICES[choice]
-                    confirmation = self._prompt(
-                        f"Confirm {label} for PID {proc.pid}? [y/N]: "
-                    )
-                    if confirmation.casefold() != "y":
-                        self.status = f"{label} cancelled for PID {proc.pid}"
-                        return
-                    signal_process(proc.pid, int(signum))
-                    self.status = f"Sent {label} to PID {proc.pid}"
-                except (KeyError, ValueError, OSError, PermissionError) as exc:
-                    self.status = f"Signal failed: {exc}"
-        elif key == curses.KEY_F1:
-            self.status = (
-                "↑/↓ Select  PgUp/PgDn Scroll  F5 Tree  ←/→ Collapse  "
-                "Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
-            )
+        self.input.handle_key(self, key)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
