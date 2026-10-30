@@ -52,6 +52,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 |---|---|
 | `↑` / `↓` or `j` / `k` | Move selection |
 | `Page Up` / `Page Down` | Move selection by ten rows |
+| `[` / `]` | Scroll the process table horizontally to reveal clipped columns |
 | `Home` / `End` | Select first / last process |
 | `s` or `F6` | Cycle sort field and direction (CPU, MEM, PID, USER, TIME, COMMAND) |
 | `/` | Filter by PID, user, or command substring |
