@@ -1,6 +1,4 @@
-# Changelog
-
-## Unreleased — Extract process-table renderer
+# Changelog\n\n## Unreleased — Extract keyboard input and prompts\n\n- Move key dispatch, tree expansion controls, and interactive prompts into `process_input.py`.\n- Keep input handling synchronous and on the curses main thread; the UI delegates to a controller over existing UI state.\n- Add delegation and controller-boundary regression tests and include the module in Ruff/Mypy CI.\n\n Unreleased — Extract process-table renderer
 
 - Move snapshot-driven process table, meter, header, and row rendering into `process_render.py`.
 - Keep all curses operations on the main thread; the UI delegates each frozen snapshot to the renderer.
