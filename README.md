@@ -70,20 +70,33 @@ Process actions follow normal Linux permissions. Kaiamon refuses to signal or re
 
 ## Configuration
 
-The background process sampling interval defaults to one second. Set it at launch with `--refresh` (seconds; minimum 0.05):
+The sampling interval defaults to one second. Kaiamon loads preferences from a JSON configuration file at `$XDG_CONFIG_HOME/kaiamon/config.json`, or `~/.config/kaiamon/config.json` when `XDG_CONFIG_HOME` is unset or relative. The file is created automatically after a clean exit and stores the sampling interval, visible columns, sort field/direction, and tree/flat view.
+
+Command-line options override saved preferences for that run. The resulting settings are written back on clean exit:
 
 ```bash
 python3 kaiamon.py --refresh 0.5
-```
-
-Select and reorder visible columns with `--columns`. Names are comma-separated and case-insensitive. Accepted names are `PID`, `USER`, `PRI`, `NI`, `VIRT`, `RES`, `SHR`, `STATE` (or `S`), `CPU` (or `CPU%`), `MEM` (or `MEM%`), `TIME` (or `TIME+`), and `COMMAND`:
-
-```bash
 python3 kaiamon.py --columns PID,USER,CPU,MEM,COMMAND
-python3 kaiamon.py --refresh 0.25 --columns PID,CPU,COMMAND
+python3 kaiamon.py --sort MEM --sort-order asc --tree
+python3 kaiamon.py --config ./kaiamon.json --flat
 ```
 
-There is not yet a persistent configuration file or an interactive setup screen.
+Use `--no-save-config` to load preferences without writing changes. Use `--config PATH` to select another file. Invalid or unsupported configuration values produce a clear startup error rather than being silently overwritten.
+
+The version 1 configuration format is:
+
+```json
+{
+  "version": 1,
+  "refresh_interval": 1.0,
+  "columns": ["PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE", "CPU", "MEM", "TIME", "COMMAND"],
+  "sort_field": "CPU",
+  "descending": true,
+  "tree_mode": false
+}
+```
+
+Accepted sort fields are `CPU`, `MEM`, `PID`, `USER`, `TIME`, and `COMMAND`. Column names and aliases are the same as the `--columns` option. Config writes use an atomic replacement and a private 0600 file, so an interrupted save does not leave a partially-written preferences file.
 
 ## Architecture
 
