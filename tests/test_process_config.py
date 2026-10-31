@@ -14,6 +14,7 @@ from process_config import (
     normalize_columns,
     save_config,
 )
+from process_monitor import ProcessMonitorUI, main
 
 
 def test_default_config_path_uses_absolute_xdg_config_home(
@@ -68,7 +69,7 @@ def test_config_file_is_created_with_private_permissions(tmp_path: Path) -> None
         ("[]", "top-level JSON value must be an object"),
         ('{"version": 2}', "unsupported configuration version"),
         ('{"refresh_interval": 0.01}', "at least 0.05"),
-        ('{"refresh_interval": NaN}', "invalid JSON"),
+        ('{"refresh_interval": NaN}', "finite"),
         ('{"columns": ["PID", "pid"]}', "duplicates"),
         ('{"columns": ["PID", "UNKNOWN"]}', "unsupported column"),
         ('{"sort_field": "NOPE"}', "sort_field"),
@@ -92,3 +93,94 @@ def test_column_normalization_supports_aliases_and_rejects_bad_shapes() -> None:
     )
     with pytest.raises(ValueError, match="non-string"):
         normalize_columns(["PID", 3])
+
+
+def test_cli_overrides_saved_values_and_persists_runtime_preferences(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    save_config(
+        path,
+        MonitorConfig(
+            refresh_interval=1.0,
+            columns=("PID", "USER"),
+            sort_field="CPU",
+            descending=True,
+            tree_mode=False,
+        ),
+    )
+    observed: dict[str, object] = {}
+
+    def fake_run(ui: ProcessMonitorUI) -> None:
+        observed.update({
+            "refresh_interval": ui.refresh_interval,
+            "columns": ui.columns,
+            "sort_field": ui.sort_field,
+            "descending": ui.descending,
+            "tree_mode": ui.tree_mode,
+        })
+        # Simulate preferences changed interactively during the session.
+        ui.sort_field = "TIME"
+        ui.descending = True
+        ui.tree_mode = False
+
+    monkeypatch.setattr(ProcessMonitorUI, "run", fake_run)
+
+    main([
+        "--config", str(path),
+        "--refresh", "0.25",
+        "--columns", "PID,COMMAND",
+        "--sort", "MEM",
+        "--sort-order", "asc",
+        "--tree",
+    ])
+
+    assert observed == {
+        "refresh_interval": 0.25,
+        "columns": ("PID", "COMMAND"),
+        "sort_field": "MEM",
+        "descending": False,
+        "tree_mode": True,
+    }
+    assert load_config(path) == MonitorConfig(
+        refresh_interval=0.25,
+        columns=("PID", "COMMAND"),
+        sort_field="TIME",
+        descending=True,
+        tree_mode=False,
+    )
+
+
+def test_no_save_config_preserves_existing_preferences(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    expected = MonitorConfig(
+        refresh_interval=0.5,
+        columns=("PID", "COMMAND"),
+        sort_field="USER",
+        descending=False,
+        tree_mode=True,
+    )
+    save_config(path, expected)
+    monkeypatch.setattr(ProcessMonitorUI, "run", lambda _ui: None)
+
+    main(["--config", str(path), "--no-save-config", "--flat"])
+
+    assert load_config(path) == expected
+
+
+def test_cli_uses_default_config_path_and_saves_after_clean_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    config_home = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    captured: list[ProcessMonitorUI] = []
+    monkeypatch.setattr(ProcessMonitorUI, "run", lambda ui: captured.append(ui))
+
+    main(["--sort", "PID", "--sort-order", "asc"])
+
+    assert len(captured) == 1
+    saved = load_config(config_home / "kaiamon" / "config.json")
+    assert saved.sort_field == "PID"
+    assert saved.descending is False
