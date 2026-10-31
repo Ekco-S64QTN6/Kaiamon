@@ -395,6 +395,27 @@ def test_sort_processes_orders_by_selected_metric() -> None:
         sort_processes(rows, "NOPE")
 
 
+
+def test_f3_opens_scrollable_system_io_panel_and_returns_to_process_table() -> None:
+    ui = ProcessMonitorUI()
+
+    ui._handle_key(curses.KEY_F3)
+    assert ui.system_io_mode is True
+    assert ui.io_panel_scroll == 0
+    assert "System I/O" in ui.status
+
+    ui._handle_key(curses.KEY_DOWN)
+    assert ui.io_panel_scroll == 1
+    ui._handle_key(curses.KEY_NPAGE)
+    assert ui.io_panel_scroll == 11
+    ui._handle_key(curses.KEY_PPAGE)
+    assert ui.io_panel_scroll == 1
+
+    ui._handle_key(27)
+    assert ui.system_io_mode is False
+    assert ui.status == "Process table"
+
+
 def test_tree_view_preserves_parent_child_order_and_orphans() -> None:
     rows = (
         _proc(1, 0, "root", "init"),
