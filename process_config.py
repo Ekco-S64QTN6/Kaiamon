@@ -102,8 +102,11 @@ def _validated_config(data: object) -> MonitorConfig:
     if not math.isfinite(refresh) or refresh < 0.05:
         raise ConfigError("'refresh_interval' must be finite and at least 0.05 seconds")
 
+    raw_columns = data.get("columns", list(DEFAULT_COLUMNS))
+    if not isinstance(raw_columns, list):
+        raise ConfigError("'columns' must be a JSON array")
     try:
-        columns = normalize_columns(data.get("columns", list(DEFAULT_COLUMNS)))
+        columns = normalize_columns(raw_columns)
     except ValueError as exc:
         raise ConfigError(str(exc)) from exc
 
@@ -135,7 +138,7 @@ def load_config(path: str | os.PathLike[str]) -> MonitorConfig:
         raw = config_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return MonitorConfig()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise ConfigError(f"could not read {config_path}: {exc}") from exc
     try:
         data = json.loads(raw)
@@ -149,6 +152,7 @@ def load_config(path: str | os.PathLike[str]) -> MonitorConfig:
 
 def save_config(path: str | os.PathLike[str], config: MonitorConfig) -> None:
     """Atomically replace the config file; the temporary file is private (0600)."""
+    validated = _validated_config(config.to_dict())
     config_path = Path(path).expanduser()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -158,7 +162,7 @@ def save_config(path: str | os.PathLike[str], config: MonitorConfig) -> None:
     temporary_path = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(config.to_dict(), stream, indent=2, sort_keys=True)
+            json.dump(validated.to_dict(), stream, indent=2, sort_keys=True)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
