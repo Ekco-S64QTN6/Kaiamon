@@ -11,37 +11,26 @@ import curses
 import math
 import signal
 import sys
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from process_config import (
+    DEFAULT_COLUMNS, SORT_FIELDS, ConfigError, MonitorConfig,
+    default_config_path, load_config, normalize_columns, save_config,
+)
 from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
-from process_render import COLUMN_LABELS, ProcessRenderer
 from process_input import ProcessInput
+from process_render import ProcessRenderer
 
 FRAME_INTERVAL_MS = 100
-SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
-DEFAULT_COLUMNS = (
-    "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
-    "CPU", "MEM", "TIME", "COMMAND",
-)
-COLUMN_ALIASES = {"CPU%": "CPU", "MEM%": "MEM", "TIME+": "TIME", "S": "STATE"}
 
 
 def parse_columns(value: str) -> tuple[str, ...]:
     """Parse an ordered, comma-separated list of visible process columns."""
-    if not isinstance(value, str):
-        raise argparse.ArgumentTypeError("columns must be a comma-separated string")
-    requested = [part.strip().upper() for part in value.split(",")]
-    if not requested or any(not part for part in requested):
-        raise argparse.ArgumentTypeError("columns cannot contain empty entries")
-    columns = tuple(COLUMN_ALIASES.get(part, part) for part in requested)
-    unsupported = [column for column in columns if column not in COLUMN_LABELS]
-    if unsupported:
-        raise argparse.ArgumentTypeError(
-            "unsupported column(s): " + ", ".join(unsupported)
-        )
-    if len(set(columns)) != len(columns):
-        raise argparse.ArgumentTypeError("columns cannot contain duplicates")
-    return columns
+    try:
+        return normalize_columns(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def parse_refresh_interval(value: str) -> float:
@@ -168,19 +157,23 @@ class ProcessMonitorUI:
     def __init__(
         self, *, refresh_interval: float = POLL_INTERVAL,
         columns: Sequence[str] = DEFAULT_COLUMNS,
+        sort_field: str = "CPU", descending: bool = True,
+        tree_mode: bool = False,
     ) -> None:
         self.refresh_interval = parse_refresh_interval(str(refresh_interval))
         self.columns = parse_columns(",".join(columns))
+        self.sort_field = sort_field.upper()
+        if self.sort_field not in SORT_FIELDS:
+            raise ValueError(f"unsupported sort field: {self.sort_field}")
+        self.descending = descending
+        self.tree_mode = tree_mode
         self.collector = ProcessCollector(poll_interval=self.refresh_interval)
         self.renderer = ProcessRenderer()
         self.input = ProcessInput()
         self.selected = 0
         self.scroll = 0
         self.horizontal_scroll = 0
-        self.sort_field = "CPU"
-        self.descending = True
         self.filter_query = ""
-        self.tree_mode = False
         self.collapsed: set[int] = set()
         self.status = (
             "F1 Help  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
@@ -296,21 +289,80 @@ class ProcessMonitorUI:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Run the Linux process monitor."""
+    """Run the Linux process monitor with XDG-backed persistent preferences."""
     if not sys.platform.startswith("linux"):
         raise SystemExit("Kaiamon's process monitor currently requires Linux /proc")
     parser = argparse.ArgumentParser(description="Kaiamon Linux process monitor")
     parser.add_argument(
-        "--refresh", type=parse_refresh_interval, default=POLL_INTERVAL,
-        metavar="SECONDS",
-        help="process sampling interval in seconds (minimum 0.05; default: 1.0)",
+        "--config", type=Path, default=None, metavar="PATH",
+        help="configuration file (default: $XDG_CONFIG_HOME/kaiamon/config.json)",
     )
     parser.add_argument(
-        "--columns", type=parse_columns, default=DEFAULT_COLUMNS,
-        metavar="LIST", help="ordered comma-separated process columns",
+        "--no-save-config", action="store_true",
+        help="load configuration but do not save preferences on exit",
+    )
+    parser.add_argument(
+        "--refresh", type=parse_refresh_interval, default=None,
+        metavar="SECONDS",
+        help="override process sampling interval (minimum 0.05 seconds)",
+    )
+    parser.add_argument(
+        "--columns", type=parse_columns, default=None,
+        metavar="LIST", help="override ordered comma-separated process columns",
+    )
+    parser.add_argument(
+        "--sort", choices=SORT_FIELDS, default=None,
+        help="override the saved process sort field",
+    )
+    parser.add_argument(
+        "--sort-order", choices=("asc", "desc"), default=None,
+        help="override saved sort direction",
+    )
+    tree_group = parser.add_mutually_exclusive_group()
+    tree_group.add_argument(
+        "--tree", dest="tree_mode", action="store_true", default=None,
+        help="start in parent/child tree view",
+    )
+    tree_group.add_argument(
+        "--flat", dest="tree_mode", action="store_false",
+        help="start in flat process-list view",
     )
     args = parser.parse_args(argv)
-    ProcessMonitorUI(refresh_interval=args.refresh, columns=args.columns).run()
+
+    config_path = args.config.expanduser() if args.config else default_config_path()
+    try:
+        stored = load_config(config_path)
+    except ConfigError as exc:
+        parser.error(str(exc))
+
+    ui = ProcessMonitorUI(
+        refresh_interval=(
+            args.refresh if args.refresh is not None else stored.refresh_interval
+        ),
+        columns=args.columns if args.columns is not None else stored.columns,
+        sort_field=args.sort if args.sort is not None else stored.sort_field,
+        descending=(
+            stored.descending if args.sort_order is None
+            else args.sort_order == "desc"
+        ),
+        tree_mode=(
+            stored.tree_mode if args.tree_mode is None else args.tree_mode
+        ),
+    )
+    ui.run()
+
+    if not args.no_save_config:
+        updated = MonitorConfig(
+            refresh_interval=ui.refresh_interval,
+            columns=ui.columns,
+            sort_field=ui.sort_field,
+            descending=ui.descending,
+            tree_mode=ui.tree_mode,
+        )
+        try:
+            save_config(config_path, updated)
+        except OSError as exc:
+            print(f"Kaiamon: could not save configuration to {config_path}: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":

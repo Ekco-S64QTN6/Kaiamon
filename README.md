@@ -70,20 +70,33 @@ Process actions follow normal Linux permissions. Kaiamon refuses to signal or re
 
 ## Configuration
 
-The background process sampling interval defaults to one second. Set it at launch with `--refresh` (seconds; minimum 0.05):
+The sampling interval defaults to one second. Kaiamon loads preferences from a JSON configuration file at `$XDG_CONFIG_HOME/kaiamon/config.json`, or `~/.config/kaiamon/config.json` when `XDG_CONFIG_HOME` is unset or relative. The file is created automatically after a clean exit and stores the sampling interval, visible columns, sort field/direction, and tree/flat view.
+
+Command-line options override saved preferences for that run. The resulting settings are written back on clean exit:
 
 ```bash
 python3 kaiamon.py --refresh 0.5
-```
-
-Select and reorder visible columns with `--columns`. Names are comma-separated and case-insensitive. Accepted names are `PID`, `USER`, `PRI`, `NI`, `VIRT`, `RES`, `SHR`, `STATE` (or `S`), `CPU` (or `CPU%`), `MEM` (or `MEM%`), `TIME` (or `TIME+`), and `COMMAND`:
-
-```bash
 python3 kaiamon.py --columns PID,USER,CPU,MEM,COMMAND
-python3 kaiamon.py --refresh 0.25 --columns PID,CPU,COMMAND
+python3 kaiamon.py --sort MEM --sort-order asc --tree
+python3 kaiamon.py --config ./kaiamon.json --flat
 ```
 
-There is not yet a persistent configuration file or an interactive setup screen.
+Use `--no-save-config` to load preferences without writing changes. Use `--config PATH` to select another file. Invalid or unsupported configuration values produce a clear startup error rather than being silently overwritten.
+
+The version 1 configuration format is:
+
+```json
+{
+  "version": 1,
+  "refresh_interval": 1.0,
+  "columns": ["PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE", "CPU", "MEM", "TIME", "COMMAND"],
+  "sort_field": "CPU",
+  "descending": true,
+  "tree_mode": false
+}
+```
+
+Accepted sort fields are `CPU`, `MEM`, `PID`, `USER`, `TIME`, and `COMMAND`. Column names and aliases are the same as the `--columns` option. Config writes use an atomic replacement and a private 0600 file, so an interrupted save does not leave a partially-written preferences file.
 
 ## Architecture
 
@@ -109,6 +122,7 @@ state + delegation      curses only              main-thread curses     signal a
 ```
 
 - `process_core.py` owns immutable process models, typed `/proc` parsers, CPU-delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
+- `process_config.py` owns versioned preference validation, XDG config-path resolution, and atomic JSON persistence. It does not import curses or depend on the UI.
 - `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
 - `process_render.py` owns snapshot-driven process-table and meter rendering. It receives a frozen snapshot and the UI's main-thread drawing surface; it does not access collector state.
@@ -135,7 +149,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
 
 Optional local static checks:
 
@@ -148,7 +162,7 @@ GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13
 
 ## Contributing
 
-Keep procfs reads in `process_core.py`, process-control validation/syscalls in `process_actions.py`, and all curses operations on the main thread in `process_monitor.py`. Collectors own their mutable state behind per-collector locks and publish frozen snapshots. Add fixture-based tests for parsing, races, and invalid actions; do not rely on live host process data or privileged operations. Run the complete suite and static checks before opening a pull request.
+Keep procfs reads in `process_core.py`, process-control validation/syscalls in `process_actions.py`, and all curses operations on the main thread in `process_monitor.py`. Collectors own their mutable state behind per-collector locks and publish frozen snapshots. Add fixture-based tests for parsing, races, invalid actions, and configuration round trips; do not rely on live host process data or privileged operations. Run the complete suite and static checks before opening a pull request.
 
 ## Roadmap
 

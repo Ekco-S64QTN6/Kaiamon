@@ -20,6 +20,7 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 - [x] Extract keyboard dispatch, tree-expansion commands, and prompts into `process_input.py` while keeping all curses operations on the main thread.
 - [x] Add horizontal process-table scrolling so narrow terminals and reordered column sets can access every configured field without changing column widths.
 - [x] Preserve matching processes' ancestor paths when filtering in tree mode, without including unrelated siblings or descendants.
+- [x] Load and atomically save versioned XDG JSON preferences for refresh interval, columns, sorting, and tree mode, with CLI overrides.
 
 ## Next
 
