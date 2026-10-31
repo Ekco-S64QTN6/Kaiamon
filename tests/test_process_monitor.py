@@ -1080,3 +1080,58 @@ def test_tree_mode_displays_matching_process_with_ancestor_path() -> None:
     assert [(process.pid, depth) for process, depth in rows] == [
         (1, 0), (2, 1), (3, 2),
     ]
+
+def test_thread_selection_tracks_tid_when_cpu_order_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    process = _proc(321, 1, "tester", "python worker")
+    first = ProcessSnapshot(processes=(process,), threads=(
+        ThreadInfo(322, 321, "R", 20, 0, 80.0, 3.0, "busy-worker", 200),
+        ThreadInfo(323, 321, "S", 20, 0, 10.0, 2.0, "idle-worker", 300),
+    ))
+    reordered = ProcessSnapshot(processes=(process,), threads=(
+        ThreadInfo(322, 321, "R", 20, 0, 5.0, 3.0, "busy-worker", 200),
+        ThreadInfo(323, 321, "S", 20, 0, 95.0, 2.0, "idle-worker", 300),
+    ))
+    snapshots = [first, reordered]
+    monkeypatch.setattr(ui.collector, "get_snapshot", lambda: snapshots[0])
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = process.start_ticks
+
+    ui._handle_key(curses.KEY_DOWN)
+    assert ui.thread_selected_tid == 323
+
+    snapshots[0] = reordered
+    answers = iter(("8", "y"))
+    monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(answers))
+    calls: list[tuple[int, int, int, int, int]] = []
+    monkeypatch.setattr(
+        "process_input.renice_thread",
+        lambda tgid, tid, parent_start, thread_start, nice: (
+            calls.append((tgid, tid, parent_start, thread_start, nice)) or nice
+        ),
+    )
+
+    ui._handle_key(ord("r"))
+
+    assert ui.thread_selected == 0
+    assert ui.thread_selected_tid == 323
+    assert calls == [(321, 323, process.start_ticks, 300, 8)]
+    assert ui.status == "Reniced TID 323 to 8"
+
+
+def test_thread_selection_recovers_when_selected_tid_exits() -> None:
+    ui = ProcessMonitorUI()
+    ui.thread_selected = 0
+    ui.thread_selected_tid = 999
+
+    rows = ui._thread_rows(ProcessSnapshot(threads=(
+        ThreadInfo(322, 321, "R", 20, 0, 50.0, 1.0, "replacement", 200),
+    )))
+
+    assert [thread.tid for thread in rows] == [322]
+    assert ui.thread_selected == 0
+    assert ui.thread_selected_tid == 322
+    assert "Selected thread exited" in ui.status
