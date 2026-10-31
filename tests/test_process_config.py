@@ -27,7 +27,7 @@ def test_default_config_path_uses_absolute_xdg_config_home(
 def test_default_config_path_falls_back_for_relative_xdg_home(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "relative/config")
     monkeypatch.setenv("HOME", str(tmp_path))
     assert default_config_path() == tmp_path / ".config" / "kaiamon" / "config.json"
 
@@ -184,3 +184,45 @@ def test_cli_uses_default_config_path_and_saves_after_clean_exit(
     saved = load_config(config_home / "kaiamon" / "config.json")
     assert saved.sort_field == "PID"
     assert saved.descending is False
+
+
+def test_cli_loads_saved_preferences_without_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "saved.json"
+    expected = MonitorConfig(
+        refresh_interval=0.4,
+        columns=("PID", "COMMAND", "CPU"),
+        sort_field="COMMAND",
+        descending=False,
+        tree_mode=True,
+    )
+    save_config(path, expected)
+    observed: list[ProcessMonitorUI] = []
+    monkeypatch.setattr(ProcessMonitorUI, "run", lambda ui: observed.append(ui))
+
+    main(["--config", str(path), "--no-save-config"])
+
+    assert len(observed) == 1
+    ui = observed[0]
+    assert ui.refresh_interval == expected.refresh_interval
+    assert ui.columns == expected.columns
+    assert ui.sort_field == expected.sort_field
+    assert ui.descending is expected.descending
+    assert ui.tree_mode is expected.tree_mode
+
+
+def test_cli_reports_invalid_config_before_starting_ui(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text('{"columns": ["PID", "UNKNOWN"]}', encoding="utf-8")
+    monkeypatch.setattr(
+        ProcessMonitorUI, "run",
+        lambda _ui: pytest.fail("UI must not start with invalid config"),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        main(["--config", str(path)])
+
+    assert error.value.code == 2
