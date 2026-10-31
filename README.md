@@ -122,6 +122,7 @@ state + delegation      curses only              main-thread curses     signal a
 ```
 
 - `process_core.py` owns immutable process models, typed `/proc` parsers, CPU-delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
+- `process_config.py` owns versioned preference validation, XDG config-path resolution, and atomic JSON persistence. It does not import curses or depend on the UI.
 - `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
 - `process_render.py` owns snapshot-driven process-table and meter rendering. It receives a frozen snapshot and the UI's main-thread drawing surface; it does not access collector state.
@@ -148,7 +149,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
 
 Optional local static checks:
 
@@ -161,7 +162,7 @@ GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13
 
 ## Contributing
 
-Keep procfs reads in `process_core.py`, process-control validation/syscalls in `process_actions.py`, and all curses operations on the main thread in `process_monitor.py`. Collectors own their mutable state behind per-collector locks and publish frozen snapshots. Add fixture-based tests for parsing, races, and invalid actions; do not rely on live host process data or privileged operations. Run the complete suite and static checks before opening a pull request.
+Keep procfs reads in `process_core.py`, process-control validation/syscalls in `process_actions.py`, and all curses operations on the main thread in `process_monitor.py`. Collectors own their mutable state behind per-collector locks and publish frozen snapshots. Add fixture-based tests for parsing, races, invalid actions, and configuration round trips; do not rely on live host process data or privileged operations. Run the complete suite and static checks before opening a pull request.
 
 ## Roadmap
 
