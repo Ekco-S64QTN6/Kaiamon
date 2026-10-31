@@ -7,7 +7,6 @@
 - Keep Escape non-destructive and prevent the user from hiding every column.
 - Add synthetic tests for toggling, enabling hidden columns, reordering, cancel behavior, and the non-empty-column invariant.
 
-
 ## Unreleased — Persistent user configuration
 
 - Load versioned JSON preferences from the XDG configuration directory, with a `~/.config` fallback.
