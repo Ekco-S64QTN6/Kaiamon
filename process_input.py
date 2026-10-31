@@ -144,6 +144,6 @@ class ProcessInput:
             ui.status = "Process table shifted right"
         elif key == curses.KEY_F1:
             ui.status = (
-                "F2 Setup  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
+                "F2 Setup  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
                 "←/→ Collapse  Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )
