@@ -704,6 +704,32 @@ def test_thread_panel_thread_renice_declines_by_default(
     assert ui.status == "Renice cancelled for TID 322"
 
 
+def test_thread_selection_loss_persists_until_navigation_acknowledges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = 100
+    ui.thread_selected_tid = 322
+    ui.thread_selected_start_ticks = 200
+    replacement = ThreadInfo(
+        322, 321, "R", 20, 0, 80.0, 3.0, "replacement-thread", 201,
+    )
+    snapshot = ProcessSnapshot(threads=(replacement,))
+    monkeypatch.setattr(ui.collector, "get_snapshot", lambda: snapshot)
+
+    ui._thread_rows(snapshot)  # Renderer observes the reused TID.
+    assert ui.thread_selection_lost is True
+    ui._handle_key(ord("r"))  # Input refreshes again in the same UI frame.
+    assert ui.thread_selection_lost is True
+    assert "review the new selection before renicing" in ui.status
+
+    ui._handle_key(curses.KEY_DOWN)
+    assert ui.thread_selection_lost is False
+    assert ui.thread_selected_start_ticks == 201
+
+
 def test_thread_renice_blocks_reused_tid_until_user_reviews_selection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
