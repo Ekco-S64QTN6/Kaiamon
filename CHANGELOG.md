@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Selected-process thread inspector
+
+- Add F4 view for per-thread TID, CPU percentage, cumulative CPU time, state, priority, nice value, and thread name.
+- Collect `/proc/<pid>/task/<tid>/stat` only for the selected process while the inspector is open, avoiding a full-system thread scan on each poll.
+- Calculate per-thread CPU deltas against system CPU counters and guard TID reuse with thread start-time ticks.
+- Keep the process row visible if its task directory or individual thread entries become inaccessible; support scrolling and F4/Esc return.
+- Add synthetic tests for targeted collection, CPU deltas, TID reuse, inaccessible task directories, keyboard lifecycle, and panel rendering.
+
+
 ## Unreleased — System I/O overview panel
 
 - Add F3 panel for per-device disk throughput from `/proc/diskstats` and per-interface network throughput from `/proc/net/dev`.
