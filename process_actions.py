@@ -25,7 +25,7 @@ def validate_process_target(pid: int, *, current_pid: int | None = None) -> None
     if current_pid is None:
         current_pid = os.getpid()
     if pid == current_pid:
-        raise ValueError("refusing to signal or renice the monitor itself")
+        raise ValueError("refusing to change the monitor itself")
 
 
 def validate_nice_value(nice: int) -> int:
