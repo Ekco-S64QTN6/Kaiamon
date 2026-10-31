@@ -119,6 +119,16 @@ def test_column_width_normalization_fills_defaults_and_accepts_aliases() -> None
         normalize_column_widths({"CPU": 7, "CPU%": 8})
 
 
+@pytest.mark.parametrize("field", ["IO_READ", "IO_WRITE"])
+def test_config_accepts_io_sort_fields(
+    tmp_path: Path, field: str,
+) -> None:
+    path = tmp_path / "io-sort.json"
+    save_config(path, MonitorConfig(sort_field=field))
+
+    assert load_config(path).sort_field == field
+
+
 def test_legacy_version_one_config_defaults_column_widths(tmp_path: Path) -> None:
     path = tmp_path / "legacy.json"
     path.write_text('{"version": 1, "columns": ["PID"]}', encoding="utf-8")
