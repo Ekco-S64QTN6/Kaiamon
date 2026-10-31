@@ -107,3 +107,18 @@ def test_renice_thread_validates_targets_and_values_before_io(
         renice_thread(
             tgid, tid, expected_process, expected_thread, nice,
         )
+
+@pytest.mark.parametrize("stat_path", ["321/stat", "321/task/322/stat"])
+def test_renice_thread_rejects_malformed_identity_files_before_syscalls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stat_path: str,
+) -> None:
+    _thread_fixture(tmp_path)
+    monkeypatch.setattr("process_actions.os.getpid", lambda: 999)
+    (tmp_path / stat_path).write_text("truncated")
+    monkeypatch.setattr(
+        "process_actions.os.setpriority",
+        lambda *_args: pytest.fail("malformed procfs identity reached setpriority"),
+    )
+
+    with pytest.raises(ValueError):
+        renice_thread(321, 322, 100, 200, 0, proc_root=tmp_path)
