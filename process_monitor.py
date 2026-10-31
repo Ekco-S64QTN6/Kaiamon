@@ -11,6 +11,7 @@ import curses
 import math
 import signal
 import sys
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from process_config import (
