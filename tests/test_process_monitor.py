@@ -17,6 +17,8 @@ from process_core import (
     ProcessSnapshot,
     cpu_usage,
     parse_cpu_times,
+    parse_diskstats,
+    parse_network_dev,
     parse_proc_io,
     parse_proc_stat,
 )
@@ -57,6 +59,17 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
     (root / "meminfo").write_text(
         "MemTotal: 100000 kB\nMemAvailable: 40000 kB\n"
     )
+    (root / "diskstats").write_text(
+        "8 0 sda 10 0 10 1 20 0 20 2 0 0 0 0\n"
+        "8 1 sda1 5 0 5 1 10 0 10 1 0 0 0 0\n"
+    )
+    (root / "net").mkdir(exist_ok=True)
+    (root / "net" / "dev").write_text(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n"
+        "lo: 50 1 0 0 0 0 0 0 60 1 0 0 0 0 0 0\n"
+    )
     if user_proc:
         proc = root / "123"
         proc.mkdir()
@@ -79,6 +92,42 @@ def _proc(
         pid, ppid, user, 20, 0, 1000, 500, 100, "S", cpu, mem, 12.0,
         command, 10,
     )
+
+
+def test_parse_diskstats_converts_sectors_to_bytes() -> None:
+    devices = parse_diskstats(
+        "8 0 sda 10 0 100 1 20 0 200 2 0 0 0 0\n"
+        "8 1 sda1 5 0 50 1 10 0 100 1 0 0 0 0\n"
+    )
+
+    assert [(device.device, device.read_bytes, device.write_bytes) for device in devices] == [
+        ("sda", 51200, 102400),
+        ("sda1", 25600, 51200),
+    ]
+
+
+def test_parse_diskstats_rejects_truncated_counters() -> None:
+    with pytest.raises(ValueError, match="truncated"):
+        parse_diskstats("8 0 sda 1 0 1")
+
+
+def test_parse_network_dev_skips_headers_and_reads_interface_counters() -> None:
+    interfaces = parse_network_dev(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n"
+        "lo: 50 1 0 0 0 0 0 0 60 1 0 0 0 0 0 0\n"
+    )
+
+    assert [(item.interface, item.receive_bytes, item.transmit_bytes) for item in interfaces] == [
+        ("eth0", 100, 200),
+        ("lo", 50, 60),
+    ]
+
+
+def test_parse_network_dev_rejects_truncated_interface_counters() -> None:
+    with pytest.raises(ValueError, match="truncated"):
+        parse_network_dev("eth0: 1 2 3\n")
 
 
 def test_parse_proc_io_reads_storage_byte_counters() -> None:
