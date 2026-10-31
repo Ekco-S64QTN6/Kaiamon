@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import signal
+from collections.abc import Iterable
 
 
 SIGNAL_CHOICES: dict[str, tuple[int, str]] = {
@@ -47,3 +48,40 @@ def renice_process(pid: int, nice: int) -> None:
     """Set the nice value for a validated process."""
     validate_process_target(pid)
     os.setpriority(os.PRIO_PROCESS, pid, validate_nice_value(nice))
+
+
+def get_available_cpus() -> frozenset[int]:
+    """Return the CPUs currently available to the monitor's own cpuset."""
+    cpus = frozenset(os.sched_getaffinity(0))
+    if not cpus:
+        raise OSError("the current process has no available CPUs")
+    return cpus
+
+
+def get_process_affinity(pid: int) -> frozenset[int]:
+    """Return the allowed CPU IDs for a validated process."""
+    validate_process_target(pid)
+    cpus = frozenset(os.sched_getaffinity(pid))
+    if not cpus:
+        raise OSError(f"PID {pid} has no available CPUs")
+    return cpus
+
+
+def set_process_affinity(pid: int, cpus: Iterable[int]) -> frozenset[int]:
+    """Set a validated process CPU mask and return the effective kernel mask."""
+    validate_process_target(pid)
+    if isinstance(cpus, (str, bytes)):
+        raise ValueError("CPU affinity must be an iterable of CPU IDs")
+    requested = set(cpus)
+    if not requested:
+        raise ValueError("at least one CPU must remain enabled")
+    if any(
+        isinstance(cpu, bool) or not isinstance(cpu, int) or cpu < 0
+        for cpu in requested
+    ):
+        raise ValueError("CPU IDs must be non-negative integers")
+    os.sched_setaffinity(pid, requested)
+    effective = frozenset(os.sched_getaffinity(pid))
+    if not effective:
+        raise OSError(f"PID {pid} has no available CPUs after applying affinity")
+    return effective
