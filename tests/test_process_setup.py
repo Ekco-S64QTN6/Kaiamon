@@ -78,6 +78,16 @@ def test_setup_can_enable_optional_io_columns() -> None:
     assert ui.columns == ("PID", "IO_READ")
 
 
+def test_setup_can_enable_cgroup_column() -> None:
+    screen = FakeScreen([curses.KEY_DOWN] * (len(AVAILABLE_COLUMNS) - 1) + [ord(" "), 10])
+    ui = FakeUI(("PID",), screen)
+
+    ProcessSetup().edit(ui)
+
+    assert ui.columns == ("PID", "CGROUP")
+    assert ui.column_widths["CGROUP"] == 40
+
+
 def test_setup_adjusts_widths_and_applies_them_with_layout() -> None:
     screen = FakeScreen([ord("+"), ord("+"), curses.KEY_DOWN, ord("-"), 10])
     ui = FakeUI(("PID", "USER"), screen)
