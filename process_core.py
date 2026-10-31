@@ -193,7 +193,7 @@ def parse_network_dev(contents: str) -> tuple[NetworkCounters, ...]:
 
 def parse_proc_cgroup(contents: str) -> str | None:
     """Return the most useful process cgroup path, preferring unified v2."""
-    paths: list[tuple[str, str]] = []
+    paths: list[str] = []
     for line in contents.splitlines():
         hierarchy, separator, remainder = line.partition(":")
         if not separator or not hierarchy.isdigit():
@@ -206,11 +206,11 @@ def parse_proc_cgroup(contents: str) -> str | None:
             continue
         if hierarchy == "0" and not controllers:
             return path
-        paths.append((path, controllers))
+        paths.append(path)
     if not paths:
         return None
     # v1 exposes one line per controller; choose the deepest distinct path.
-    return max((path for path, _controllers in paths), key=lambda path: (len(path), path))
+    return max(paths, key=lambda path: (len(path), path))
 
 
 def parse_proc_io(contents: str) -> tuple[int, int]:
