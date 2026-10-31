@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import curses
 
-from process_config import DEFAULT_COLUMN_WIDTHS, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH
+from process_config import AVAILABLE_COLUMNS, DEFAULT_COLUMN_WIDTHS, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH
 from process_setup import ProcessSetup
 
 
@@ -67,6 +67,15 @@ def test_setup_can_enable_a_previously_hidden_column() -> None:
     ProcessSetup().edit(ui)
 
     assert ui.columns == ("PID", "USER")
+
+
+def test_setup_can_enable_optional_io_columns() -> None:
+    screen = FakeScreen([curses.KEY_DOWN] * len(AVAILABLE_COLUMNS[:12]) + [ord(" "), 10])
+    ui = FakeUI(("PID",), screen)
+
+    ProcessSetup().edit(ui)
+
+    assert ui.columns == ("PID", "IO_READ")
 
 
 def test_setup_adjusts_widths_and_applies_them_with_layout() -> None:
