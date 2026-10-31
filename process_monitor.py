@@ -20,7 +20,7 @@ from process_config import (
 )
 from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
 from process_input import ProcessInput
-from process_render import COLUMN_LABELS, ProcessRenderer
+from process_render import ProcessRenderer
 
 FRAME_INTERVAL_MS = 100
 
