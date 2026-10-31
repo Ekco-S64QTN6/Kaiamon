@@ -63,7 +63,8 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `Space` | Toggle the selected tree node |
 | `K` | Choose TERM, KILL, INT, or HUP; confirm with `y` (default is no) |
 | `r` | Set the selected process nice value (-20 through 19) |
-| `F1` | Show the keybinding summary in the status line |\n| `F2` | Open the column setup screen; Space toggles visibility, Left/Right reorders, Enter applies, and Esc cancels |
+| `F1` | Show the keybinding summary in the status line |
+| `F2` | Open the column setup screen; Space toggles visibility, Left/Right reorders, Enter applies, and Esc cancels |
 | `q` | Quit |
 
 Process actions follow normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
