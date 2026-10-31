@@ -60,12 +60,14 @@ def normalize_columns(value: object) -> tuple[str, ...]:
         requested = list(value)
     else:
         raise ValueError("columns must be a list or comma-separated string")
-    if not requested or any(not isinstance(item, str) or not item.strip() for item in requested):
-        raise ValueError("columns cannot contain empty or non-string entries")
-    columns = tuple(
-        COLUMN_ALIASES.get(item.strip().upper(), item.strip().upper())
-        for item in requested
-    )
+    normalized: list[str] = []
+    for item in requested:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("columns cannot contain empty or non-string entries")
+        normalized.append(item.strip().upper())
+    if not normalized:
+        raise ValueError("columns cannot be empty")
+    columns = tuple(COLUMN_ALIASES.get(item, item) for item in normalized)
     unsupported = [column for column in columns if column not in SUPPORTED_COLUMNS]
     if unsupported:
         raise ValueError("unsupported column(s): " + ", ".join(unsupported))
