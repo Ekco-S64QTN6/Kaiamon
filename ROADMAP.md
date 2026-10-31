@@ -23,6 +23,7 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 - [x] Load and atomically save versioned XDG JSON preferences for refresh interval, columns, sorting, and tree mode, with CLI overrides.
 - [x] Add an interactive F2 column setup screen to toggle visible columns and reorder them without restarting.
 - [x] Add per-column width editing (1–120 characters) to F2 setup and persist widths in the existing version-1 configuration format with backward-compatible defaults.
+- [x] Collect per-process `/proc/<pid>/io` read/write byte deltas as rates, expose optional I/O table columns and sort fields, and tolerate inaccessible I/O counters.
 
 ## Next
 
@@ -35,7 +36,7 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 
 - Thread view and per-thread actions.
 - CPU affinity and other scheduler controls.
-- I/O, disk, network, and GPU process monitoring.
+- System-wide disk/network meters and GPU process monitoring.
 - Cross-platform backends and plugin architecture.
 - Full htop configuration/setup parity beyond the initial editable column layout (for example, configurable meters, colors, and header arrangement).
 
