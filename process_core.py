@@ -204,8 +204,11 @@ def parse_proc_cgroup(contents: str) -> str | None:
         path = raw_path.strip()
         if not path.startswith("/"):
             continue
-        if hierarchy == "0" and not controllers:
-            return path
+        if hierarchy == "0":
+            if not controllers:
+                return path
+            # Hierarchy zero is reserved for unified cgroup v2.
+            continue
         paths.append(path)
     if not paths:
         return None
