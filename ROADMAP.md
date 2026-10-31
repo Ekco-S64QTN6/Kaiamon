@@ -29,6 +29,7 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 - [x] Add guarded per-thread nice editing from F4, with default-no confirmation, parent-process and TID start-time revalidation, and stable TID selection as CPU sorting changes.
 - [x] Add an F8 CPU-affinity editor for selected processes using Linux scheduler affinity calls; protect PID 1/self, require a non-empty CPU mask and default-no confirmation, and recheck process start time before applying changes.
 - [x] Extend F4 thread inspection with row selection and individually renice a selected TID using parent/TID start-time verification and default-no confirmation; bind background thread sampling to the original process start time to prevent PID reuse.
+- [x] Derive process start epochs from `/proc/stat` `btime` and per-process start ticks; add optional `START` and `ELAPSED` columns with sorting, compact formatting, and safe unavailable values.
 
 ## Next
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Process start and elapsed time
+
+- Parse `/proc/stat` `btime` and combine it with each process's start ticks and clock-tick frequency to derive a wall-clock start epoch.
+- Add optional `START` and `ELAPSED` process columns and F6 sort fields, with today's start times shown as `HH:MM` and older starts as month/day.
+- Keep these values unavailable rather than failing collection if boot-time data is missing or malformed.
+- Add parser, collector, sorting, formatting, config, and renderer tests.
+
+
 ## Unreleased — Safe per-thread renice
 
 - Add `r` in the F4 thread inspector to change the selected thread's nice value, with input validation and default-no confirmation.

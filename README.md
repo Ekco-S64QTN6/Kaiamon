@@ -42,6 +42,8 @@ The process table includes:
 | `CPU%` | CPU use from process and system counter deltas |
 | `MEM%` | Resident memory as a percentage of physical memory |
 | `TIME+` | Accumulated process CPU time |
+| `START` | Local process start time (`HH:MM` today, otherwise month/day) |
+| `ELAPSED` | Wall-clock age since process start |
 | `COMMAND` | Command line, or process name when unavailable |
 | `IOR/s` | Per-process storage read rate from `/proc/<pid>/io` |
 | `IOW/s` | Per-process storage write rate from `/proc/<pid>/io` |
@@ -56,7 +58,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `Page Up` / `Page Down` | Move selection by ten rows |
 | `[` / `]` | Scroll the process table horizontally to reveal clipped columns |
 | `Home` / `End` | Select first / last process |
-| `s` or `F6` | Cycle sort field and direction (CPU, MEM, PID, USER, TIME, COMMAND, I/O read, I/O write) |
+| `s` or `F6` | Cycle sort field and direction (CPU, MEM, PID, USER, TIME, COMMAND, I/O read, I/O write, START, ELAPSED) |
 | `/` | Filter by PID, user, or command substring |
 | `Esc` | Clear the filter |
 | `t` or `F5` | Toggle parent/child tree view |
@@ -96,14 +98,14 @@ The version 1 configuration format is:
   "version": 1,
   "refresh_interval": 1.0,
   "columns": ["PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE", "CPU", "MEM", "TIME", "COMMAND"],
-  "column_widths": {"PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7, "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24, "IO_READ": 8, "IO_WRITE": 8},
+  "column_widths": {"PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7, "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24, "IO_READ": 8, "IO_WRITE": 8, "START": 8, "ELAPSED": 9},
   "sort_field": "CPU",
   "descending": true,
   "tree_mode": false
 }
 ```
 
-Accepted sort fields are `CPU`, `MEM`, `PID`, `USER`, `TIME`, `COMMAND`, `IO_READ`, and `IO_WRITE` (also displayed as `IOR/s` and `IOW/s`). Column names and aliases are the same as the `--columns` option. `column_widths` is a per-column character width map; omitted entries use defaults, and accepted widths range from 1 to 120. Existing version-1 files without this key remain valid and receive default widths. Config writes use an atomic replacement and a private 0600 file, so an interrupted save does not leave a partially-written preferences file.
+Accepted sort fields are `CPU`, `MEM`, `PID`, `USER`, `TIME`, `COMMAND`, `IO_READ`, `IO_WRITE`, `START`, and `ELAPSED` (also displayed as `IOR/s` and `IOW/s`). Column names and aliases are the same as the `--columns` option. `column_widths` is a per-column character width map; omitted entries use defaults, and accepted widths range from 1 to 120. Existing version-1 files without this key remain valid and receive default widths. Process start/elapsed values are derived from `/proc/stat` boot time and the per-process start ticks; when boot time is unavailable, those optional cells display `—`. Config writes use an atomic replacement and a private 0600 file, so an interrupted save does not leave a partially-written preferences file.
 
 ## Architecture
 
@@ -143,7 +145,7 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 ## Comparison with htop
 
-**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; on-demand per-process thread inspection with per-thread CPU percentages, time, and individual-thread renicing; process CPU-affinity inspection and editing; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
+**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; on-demand per-process thread inspection with per-thread CPU percentages, time, and individual-thread renicing; process CPU-affinity inspection and editing; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O/START/ELAPSED sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
 **Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its sampling interval is configured at launch; visible columns can be changed at runtime with F2 or at launch. Filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
@@ -158,7 +160,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, column-width validation and setup interactions, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, selected-process thread sampling and rendering, CPU-affinity validation/editor behavior, per-thread renice validation and UI behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+The tests cover procfs parsing, delta CPU calculations, boot-time parsing and process start/elapsed display, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, column-width validation and setup interactions, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, selected-process thread sampling and rendering, CPU-affinity validation/editor behavior, per-thread renice validation and UI behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
 
 Optional local static checks:
 

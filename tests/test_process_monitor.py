@@ -20,6 +20,7 @@ from process_core import (
     parse_cpu_times,
     parse_diskstats,
     parse_network_dev,
+    parse_boot_time,
     parse_proc_io,
     parse_proc_stat,
 )
@@ -56,6 +57,7 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
         "cpu 100 0 50 850 0 0 0 0\n"
         "cpu0 50 0 25 425 0 0 0 0\n"
         "cpu1 50 0 25 425 0 0 0 0\n"
+        "btime 1700000000\n"
     )
     (root / "meminfo").write_text(
         "MemTotal: 100000 kB\nMemAvailable: 40000 kB\n"
@@ -203,11 +205,103 @@ def test_process_collector_reads_fixture_and_publishes_nonempty_snapshot(
     assert process.res_kb == 400
     assert process.shr_kb == 80
     assert process.cpu_time_s == pytest.approx(0.15)
+    assert process.start_time_s == pytest.approx(1700000001.0)
     assert process.io_read_rate is None
     assert process.io_write_rate is None
     assert first.memory_total_kb == 100000
     assert first.memory_used_kb == 60000
     assert collector.get_snapshot() == first
+
+
+
+def test_parse_boot_time_reads_proc_stat_epoch() -> None:
+    assert parse_boot_time("cpu 1 2 3 4\nbtime 1700000000\n") == 1700000000
+
+
+def test_parse_boot_time_handles_missing_or_invalid_field() -> None:
+    assert parse_boot_time("cpu 1 2 3 4\n") is None
+    with pytest.raises(ValueError, match="invalid"):
+        parse_boot_time("btime yesterday\n")
+    with pytest.raises(ValueError, match="negative"):
+        parse_boot_time("btime -1\n")
+
+
+def test_start_and_elapsed_sorting_use_process_start_epoch() -> None:
+    rows = (
+        replace(_proc(10, 1, "a", "older"), start_time_s=100.0),
+        replace(_proc(20, 1, "b", "newer"), start_time_s=200.0),
+    )
+
+    assert [process.pid for process in sort_processes(rows, "START")] == [20, 10]
+    assert [process.pid for process in sort_processes(rows, "ELAPSED")] == [10, 20]
+    unknown = replace(rows[0], pid=30, start_time_s=None)
+    with_unknown = rows + (unknown,)
+    assert [process.pid for process in sort_processes(with_unknown, "START")] == [20, 10, 30]
+    assert [process.pid for process in sort_processes(with_unknown, "START", False)] == [10, 20, 30]
+    assert [process.pid for process in sort_processes(with_unknown, "ELAPSED")] == [10, 20, 30]
+    assert [process.pid for process in sort_processes(iter(with_unknown), "START")] == [20, 10, 30]
+
+
+
+def test_f6_cycles_through_start_and_elapsed_sort_modes() -> None:
+    ui = ProcessMonitorUI(sort_field="IO_WRITE", descending=False)
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "START"
+    assert ui.descending is True
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "START"
+    assert ui.descending is False
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "ELAPSED"
+    assert ui.descending is True
+
+
+def test_start_and_elapsed_time_formatters_handle_today_old_and_missing() -> None:
+    from datetime import datetime
+
+    now = 1700003600.0
+    start_today = now - 300.0
+    start_old = now - 3 * 86400.0
+
+    assert ProcessMonitorUI._fmt_start_time(start_today, now) == datetime.fromtimestamp(
+        start_today
+    ).strftime("%H:%M")
+    assert ProcessMonitorUI._fmt_start_time(start_old, now) == datetime.fromtimestamp(
+        start_old
+    ).strftime("%b%d")
+    assert ProcessMonitorUI._fmt_start_time(None, now) == "—"
+    assert ProcessMonitorUI._fmt_elapsed(now - (2 * 86400 + 3 * 3600 + 4 * 60), now) == (
+        "2d03:04"
+    )
+    assert ProcessMonitorUI._fmt_elapsed(None, now) == "—"
+
+
+
+@pytest.mark.parametrize("boot_line", [None, "btime invalid\n"])
+def test_collector_keeps_process_visible_when_boot_time_unavailable(
+    tmp_path: Path, boot_line: str | None,
+) -> None:
+    _fixture(tmp_path)
+    stat_path = tmp_path / "stat"
+    existing = [
+        line for line in stat_path.read_text().splitlines()
+        if not line.startswith("btime ")
+    ]
+    if boot_line is not None:
+        existing.append(boot_line.strip())
+    stat_path.write_text("\n".join(existing) + "\n")
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.processes[0].start_time_s is None
 
 
 def test_process_cpu_is_delta_based_and_starttime_guards_pid_reuse(
@@ -550,6 +644,7 @@ def test_sort_processes_orders_by_selected_metric() -> None:
         replace(process, io_write_rate=process.pid * 10.0) for process in rows
     )
     assert [p.pid for p in sort_processes(write_rows, "IO_WRITE")] == [20, 10]
+    assert [p.pid for p in sort_processes(tuple(replace(p, start_time_s=float(p.pid)) for p in rows), "START")] == [20, 10]
     with pytest.raises(ValueError):
         sort_processes(rows, "NOPE")
 
