@@ -10,7 +10,7 @@ The default application is process-centric. The former ping, systemd, thermal, a
 - Python 3.10 or newer
 - A terminal with curses support (the standard-library `curses` module)
 
-The process monitor uses only the Python standard library. Listing processes does not require root, although Linux permissions may limit visibility of details and process actions.
+The process monitor uses only the Python standard library. Listing processes does not require root, although Linux permissions may limit visibility of details and process actions. Per-process I/O rates are shown when `/proc/<pid>/io` is readable; unavailable counters display as `—` without hiding the process.
 
 ## Installation
 
@@ -43,6 +43,8 @@ The process table includes:
 | `MEM%` | Resident memory as a percentage of physical memory |
 | `TIME+` | Accumulated process CPU time |
 | `COMMAND` | Command line, or process name when unavailable |
+| `IOR/s` | Per-process storage read rate from `/proc/<pid>/io` |
+| `IOW/s` | Per-process storage write rate from `/proc/<pid>/io` |
 
 Aggregate CPU and memory meters appear above the table. Up to eight compact per-core CPU meters are shown in the header. Processes that exit or become inaccessible during a sample are skipped.
 
@@ -54,7 +56,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `Page Up` / `Page Down` | Move selection by ten rows |
 | `[` / `]` | Scroll the process table horizontally to reveal clipped columns |
 | `Home` / `End` | Select first / last process |
-| `s` or `F6` | Cycle sort field and direction (CPU, MEM, PID, USER, TIME, COMMAND) |
+| `s` or `F6` | Cycle sort field and direction (CPU, MEM, PID, USER, TIME, COMMAND, I/O read, I/O write) |
 | `/` | Filter by PID, user, or command substring |
 | `Esc` | Clear the filter |
 | `t` or `F5` | Toggle parent/child tree view |
@@ -123,7 +125,7 @@ main-thread lifecycle    snapshot renderer        keys + prompts          valida
 state + delegation      curses only              main-thread curses     signal and renice
 ```
 
-- `process_core.py` owns immutable process models, typed `/proc` parsers, CPU-delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
+- `process_core.py` owns immutable process models, typed `/proc` parsers, CPU and per-process I/O delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
 - `process_config.py` owns versioned preference validation, XDG config-path resolution, and atomic JSON persistence. It does not import curses or depend on the UI.
 - `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
@@ -137,11 +139,11 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 ## Comparison with htop
 
-**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
+**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
 **Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its sampling interval is configured at launch; visible columns can be changed at runtime with F2 or at launch. Filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
-**Not yet implemented:** full htop setup/configuration parity, process/thread toggles, CPU affinity, I/O and disk/network meters, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
+**Not yet implemented:** full htop setup/configuration parity, process/thread toggles, CPU affinity, system-wide disk/network meters, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
 
 ## Testing
 
