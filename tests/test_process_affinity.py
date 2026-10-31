@@ -74,19 +74,21 @@ def test_get_and_set_process_affinity_use_kernel_mask(
     current = {1, 3}
     observed: list[tuple[int, set[int]]] = []
 
+    def fake_set(pid: int, cpus: set[int]) -> None:
+        observed.append((pid, set(cpus)))
+        current.clear()
+        current.update(cpus)
+
     monkeypatch.setattr("process_actions.os.getpid", lambda: 999)
     monkeypatch.setattr(
         "process_actions.os.sched_getaffinity",
         lambda pid: {0, 2, 4} if pid == 0 else current,
     )
-    monkeypatch.setattr(
-        "process_actions.os.sched_setaffinity",
-        lambda pid, cpus: observed.append((pid, set(cpus))),
-    )
+    monkeypatch.setattr("process_actions.os.sched_setaffinity", fake_set)
 
     assert get_available_cpus() == frozenset({0, 2, 4})
     assert get_process_affinity(321) == frozenset({1, 3})
-    assert set_process_affinity(321, {2, 4}) == frozenset({1, 3})
+    assert set_process_affinity(321, {2, 4}) == frozenset({2, 4})
     assert observed == [(321, {2, 4})]
 
 
