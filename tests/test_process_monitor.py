@@ -372,7 +372,7 @@ def test_selected_process_thread_sampling_tracks_cpu_and_pid_reuse(
     )
 
     assert collector.collect_once().threads == ()
-    collector.set_thread_target(123)
+    collector.set_thread_target(123, 100)
     first = collector.collect_once()
     assert {thread.tid for thread in first.threads} == {123, 456}
     assert all(thread.cpu_percent == 0.0 for thread in first.threads)
@@ -420,7 +420,7 @@ def test_missing_task_directory_does_not_hide_process(
         tmp_path, clock_ticks=100, page_size=4096,
         uid_lookup=lambda _uid: "tester",
     )
-    collector.set_thread_target(123)
+    collector.set_thread_target(123, 100)
 
     snapshot = collector.collect_once()
 
@@ -438,6 +438,7 @@ def test_thread_sampling_is_targeted_and_can_be_disabled(
     )
     collector.set_thread_target(123)
 
+    collector.set_thread_target(123, 100)
     assert {thread.tid for thread in collector.collect_once().threads} == {123, 456}
 
     collector.set_thread_target(None)
@@ -449,6 +450,35 @@ def test_thread_target_rejects_invalid_pid(invalid_pid: int) -> None:
     collector = ProcessCollector()
     with pytest.raises(ValueError, match="positive integer"):
         collector.set_thread_target(invalid_pid)
+
+
+
+def test_thread_sampling_stops_when_target_pid_is_reused(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+    collector.set_thread_target(123, 100)
+    assert {thread.tid for thread in collector.collect_once().threads} == {123, 456}
+
+    (tmp_path / "123" / "stat").write_text(
+        _stat_line(123, "replacement process", utime=1, stime=1, start=999)
+    )
+    snapshot = collector.collect_once()
+
+    assert snapshot.processes[0].start_ticks == 999
+    assert snapshot.threads == ()
+
+
+def test_thread_target_validates_process_start_ticks() -> None:
+    collector = ProcessCollector()
+    with pytest.raises(ValueError, match="non-negative integer"):
+        collector.set_thread_target(123, -1)
+    with pytest.raises(ValueError, match="require a target PID"):
+        collector.set_thread_target(None, 123)
 
 
 def test_collector_skips_process_that_disappears_during_sample(
