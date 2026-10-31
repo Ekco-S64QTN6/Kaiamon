@@ -69,6 +69,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `F2` | Open column setup; Space toggles visibility, Left/Right reorders, `-` / `+` resize the selected column, Enter applies, and Esc cancels |
 | `F3` | Open the system I/O panel; view per-device disk and per-interface network rates, use Up/Down or Page Up/Down to scroll, and F3/Esc to return |
 | `F4` | Inspect threads for the selected process; view TID, CPU%, CPU time, state, priority, nice value, and thread name. Up/Down or Page Up/Down scroll; F4/Esc returns |
+| `F8` | Edit the selected process CPU affinity; Space toggles CPUs, Enter asks for confirmation, and Esc cancels. PID 1 and the monitor itself are protected |
 | `q` | Quit |
 
 Process actions follow normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
@@ -133,7 +134,8 @@ state + delegation      curses only              main-thread curses     signal a
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
 - `process_setup.py` owns the F2 column editor. It stages visibility, order, and per-column widths on the curses main thread; Enter applies them and Escape discards them.
 - `process_render.py` owns snapshot-driven process-table and meter rendering. It receives a frozen snapshot and the UI's main-thread drawing surface; it does not access collector state.
-- `process_actions.py` owns validation and the small set of process-control syscalls. It has no curses dependency, making the safety policy independently testable.
+- `process_actions.py` owns validation and process-control syscalls, including CPU-affinity read/write operations. It has no curses dependency, making the safety policy independently testable.
+- `process_affinity.py` owns the main-thread F8 CPU-mask editor. It stages changes, blocks an empty mask, verifies the selected PID/start-time before applying, and requires default-no confirmation.
 
 CPU percentages use per-PID CPU-time deltas divided by system CPU-time deltas and scaled by the number of online cores; they are not lifetime averages. Process start-time ticks guard against PID reuse. Common procfs races (process exit, permission errors, malformed or truncated pseudo-files) are skipped. The curses wrapper restores terminal mode on exit and exceptions; the collector is stopped and original SIGINT/SIGTERM handlers are restored in a `finally` block.
 
@@ -141,11 +143,11 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 ## Comparison with htop
 
-**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; on-demand per-process thread inspection with per-thread CPU percentages and time; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
+**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; on-demand per-process thread inspection with per-thread CPU percentages and time; process CPU-affinity inspection and editing; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
 **Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its sampling interval is configured at launch; visible columns can be changed at runtime with F2 or at launch. Filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
-**Not yet implemented:** full htop setup/configuration parity, per-thread process-control actions, CPU affinity, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
+**Not yet implemented:** full htop setup/configuration parity, per-thread process-control actions, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
 
 ## Testing
 
@@ -156,13 +158,13 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, column-width validation and setup interactions, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, selected-process thread sampling and rendering, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, column-width validation and setup interactions, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, selected-process thread sampling and rendering, CPU-affinity validation/editor behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
 
 Optional local static checks:
 
 ```bash
-python -m ruff check kaiamon.py process_core.py process_actions.py process_config.py process_setup.py process_render.py process_input.py process_monitor.py tests
-python -m mypy process_core.py process_actions.py process_config.py process_setup.py process_render.py process_input.py process_monitor.py
+python -m ruff check kaiamon.py process_core.py process_actions.py process_affinity.py process_config.py process_setup.py process_render.py process_input.py process_monitor.py tests
+python -m mypy process_core.py process_actions.py process_affinity.py process_config.py process_setup.py process_render.py process_input.py process_monitor.py
 ```
 
 GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13.
