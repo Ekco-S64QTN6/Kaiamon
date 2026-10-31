@@ -17,6 +17,8 @@ from process_core import (
     ProcessSnapshot,
     cpu_usage,
     parse_cpu_times,
+    parse_diskstats,
+    parse_network_dev,
     parse_proc_io,
     parse_proc_stat,
 )
@@ -57,6 +59,17 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
     (root / "meminfo").write_text(
         "MemTotal: 100000 kB\nMemAvailable: 40000 kB\n"
     )
+    (root / "diskstats").write_text(
+        "8 0 sda 10 0 10 1 20 0 20 2 0 0 0 0\n"
+        "8 1 sda1 5 0 5 1 10 0 10 1 0 0 0 0\n"
+    )
+    (root / "net").mkdir(exist_ok=True)
+    (root / "net" / "dev").write_text(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n"
+        "lo: 50 1 0 0 0 0 0 0 60 1 0 0 0 0 0 0\n"
+    )
     if user_proc:
         proc = root / "123"
         proc.mkdir()
@@ -79,6 +92,42 @@ def _proc(
         pid, ppid, user, 20, 0, 1000, 500, 100, "S", cpu, mem, 12.0,
         command, 10,
     )
+
+
+def test_parse_diskstats_converts_sectors_to_bytes() -> None:
+    devices = parse_diskstats(
+        "8 0 sda 10 0 100 1 20 0 200 2 0 0 0 0\n"
+        "8 1 sda1 5 0 50 1 10 0 100 1 0 0 0 0\n"
+    )
+
+    assert [(device.device, device.read_bytes, device.write_bytes) for device in devices] == [
+        ("sda", 51200, 102400),
+        ("sda1", 25600, 51200),
+    ]
+
+
+def test_parse_diskstats_rejects_truncated_counters() -> None:
+    with pytest.raises(ValueError, match="truncated"):
+        parse_diskstats("8 0 sda 1 0 1")
+
+
+def test_parse_network_dev_skips_headers_and_reads_interface_counters() -> None:
+    interfaces = parse_network_dev(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n"
+        "lo: 50 1 0 0 0 0 0 0 60 1 0 0 0 0 0 0\n"
+    )
+
+    assert [(item.interface, item.receive_bytes, item.transmit_bytes) for item in interfaces] == [
+        ("eth0", 100, 200),
+        ("lo", 50, 60),
+    ]
+
+
+def test_parse_network_dev_rejects_truncated_interface_counters() -> None:
+    with pytest.raises(ValueError, match="truncated"):
+        parse_network_dev("eth0: 1 2 3\n")
 
 
 def test_parse_proc_io_reads_storage_byte_counters() -> None:
@@ -234,6 +283,74 @@ def test_missing_process_io_file_does_not_hide_process(
     assert snapshot.processes[0].io_write_rate is None
 
 
+
+def test_system_disk_and_network_rates_use_per_device_deltas(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    sample_times = iter((10.0, 12.0, 14.0))
+    collector = ProcessCollector(
+        tmp_path,
+        clock_ticks=100,
+        page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+        monotonic_clock=lambda: next(sample_times),
+    )
+
+    first = collector.collect_once()
+    assert {item.device for item in first.disk_io} == {"sda", "sda1"}
+    assert {item.interface for item in first.network_io} == {"eth0", "lo"}
+    assert all(item.read_bytes_s is None for item in first.disk_io)
+    assert all(item.receive_bytes_s is None for item in first.network_io)
+
+    (tmp_path / "diskstats").write_text(
+        "8 0 sda 10 0 110 1 20 0 220 2 0 0 0 0\n"
+        "8 1 sda1 5 0 60 1 10 0 120 1 0 0 0 0\n"
+    )
+    (tmp_path / "net" / "dev").write_text(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 500 1 0 0 0 0 0 0 1000 1 0 0 0 0 0 0\n"
+        "lo: 70 1 0 0 0 0 0 0 100 1 0 0 0 0 0 0\n"
+    )
+    second = collector.collect_once()
+    disks = {item.device: item for item in second.disk_io}
+    networks = {item.interface: item for item in second.network_io}
+    assert disks["sda"].read_bytes_s == pytest.approx(25_600.0)
+    assert disks["sda"].write_bytes_s == pytest.approx(51_200.0)
+    assert networks["eth0"].receive_bytes_s == pytest.approx(200.0)
+    assert networks["eth0"].transmit_bytes_s == pytest.approx(400.0)
+
+    # Counter resets or device replacement must not create negative throughput.
+    (tmp_path / "diskstats").write_text("8 0 sda 10 0 1 1 20 0 1 2 0 0 0 0\n")
+    (tmp_path / "net" / "dev").write_text(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 1 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0\n"
+    )
+    third = collector.collect_once()
+    assert {item.device: item for item in third.disk_io}["sda"].read_bytes_s == 0.0
+    assert {item.interface: item for item in third.network_io}["eth0"].receive_bytes_s == 0.0
+
+
+def test_missing_system_io_files_do_not_break_process_collection(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    (tmp_path / "diskstats").unlink()
+    (tmp_path / "net" / "dev").unlink()
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.disk_io == ()
+    assert snapshot.network_io == ()
+
+
 def test_collector_skips_process_that_disappears_during_sample(
     tmp_path: Path,
 ) -> None:
@@ -276,6 +393,27 @@ def test_sort_processes_orders_by_selected_metric() -> None:
     assert [p.pid for p in sort_processes(write_rows, "IO_WRITE")] == [20, 10]
     with pytest.raises(ValueError):
         sort_processes(rows, "NOPE")
+
+
+
+def test_f3_opens_scrollable_system_io_panel_and_returns_to_process_table() -> None:
+    ui = ProcessMonitorUI()
+
+    ui._handle_key(curses.KEY_F3)
+    assert ui.system_io_mode is True
+    assert ui.io_panel_scroll == 0
+    assert "System I/O" in ui.status
+
+    ui._handle_key(curses.KEY_DOWN)
+    assert ui.io_panel_scroll == 1
+    ui._handle_key(curses.KEY_NPAGE)
+    assert ui.io_panel_scroll == 11
+    ui._handle_key(curses.KEY_PPAGE)
+    assert ui.io_panel_scroll == 1
+
+    ui._handle_key(27)
+    assert ui.system_io_mode is False
+    assert ui.status == "Process table"
 
 
 def test_tree_view_preserves_parent_child_order_and_orphans() -> None:

@@ -64,6 +64,24 @@ class ProcessInput:
             curses.curs_set(0)
 
     def handle_key(self, ui: Any, key: int) -> None:
+        if ui.system_io_mode:
+            if key in (curses.KEY_F3, 27):
+                ui.system_io_mode = False
+                ui.status = "Process table"
+            elif key in (curses.KEY_UP, ord("k")):
+                ui.io_panel_scroll = max(0, ui.io_panel_scroll - 1)
+            elif key in (curses.KEY_DOWN, ord("j")):
+                ui.io_panel_scroll += 1
+            elif key == curses.KEY_PPAGE:
+                ui.io_panel_scroll = max(0, ui.io_panel_scroll - 10)
+            elif key == curses.KEY_NPAGE:
+                ui.io_panel_scroll += 10
+            elif key == curses.KEY_HOME:
+                ui.io_panel_scroll = 0
+            elif key == curses.KEY_END:
+                ui.io_panel_scroll = 10**6
+            return
+
         rows = ui._visible(ui.collector.get_snapshot())
         if key in (curses.KEY_UP, ord("k")):
             ui.selected = max(0, ui.selected - 1)
@@ -79,6 +97,10 @@ class ProcessInput:
             ui.selected = max(0, len(rows) - 1)
         elif key == curses.KEY_F2:
             ProcessSetup().edit(ui)
+        elif key == curses.KEY_F3:
+            ui.system_io_mode = True
+            ui.io_panel_scroll = 0
+            ui.status = "System I/O — per-device and per-interface rates"
         elif key in (curses.KEY_F5, ord("t"), ord("T")):
             ui.tree_mode = not ui.tree_mode
             ui.selected = 0
@@ -144,6 +166,6 @@ class ProcessInput:
             ui.status = "Process table shifted right"
         elif key == curses.KEY_F1:
             ui.status = (
-                "F2 Setup  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
+                "F2 Setup  F3 System I/O  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
                 "←/→ Collapse  Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )

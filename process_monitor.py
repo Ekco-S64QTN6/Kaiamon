@@ -180,10 +180,12 @@ class ProcessMonitorUI:
         self.selected = 0
         self.scroll = 0
         self.horizontal_scroll = 0
+        self.system_io_mode = False
+        self.io_panel_scroll = 0
         self.filter_query = ""
         self.collapsed: set[int] = set()
         self.status = (
-            "F1 Help  F2 Setup  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
+            "F1 Help  F2 Setup  F3 System I/O  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
         )
         self._stdscr: Any = None
         self._running = False

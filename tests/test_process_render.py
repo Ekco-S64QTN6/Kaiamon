@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from process_core import ProcessInfo, ProcessSnapshot
+from process_core import DiskIORate, NetworkIORate, ProcessInfo, ProcessSnapshot
 from process_monitor import ProcessMonitorUI
 
 
@@ -154,3 +154,44 @@ def test_renderer_displays_process_io_rates_and_unavailable_values(
     assert "IOW/s" in header
     assert "2.0K/s" in row
     assert "—" in row
+
+def test_renderer_draws_system_io_panel_with_device_and_interface_rates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    ui.system_io_mode = True
+    screen = FakeScreen(height=18, width=100)
+    ui._stdscr = screen
+    snapshot = ProcessSnapshot(
+        disk_io=(DiskIORate("nvme0n1", 2048.0, 4096.0),),
+        network_io=(NetworkIORate("enp1s0", 1024.0, 512.0),),
+    )
+
+    ui.renderer.draw(ui, snapshot)
+
+    rendered = "\n".join(line for _y, _x, line, _n in screen.lines)
+    assert "SYSTEM I/O" in rendered
+    assert "nvme0n1" in rendered
+    assert "enp1s0" in rendered
+    assert "2.0K/s" in rendered
+    assert "4.0K/s" in rendered
+    assert "1.0K/s" in rendered
+    assert "512B/s" in rendered
+    assert "F3/Esc Process table" in rendered
+
+
+def test_renderer_shows_unavailable_system_io_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    ui.system_io_mode = True
+    screen = FakeScreen(height=18, width=100)
+    ui._stdscr = screen
+
+    ui.renderer.draw(ui, ProcessSnapshot())
+
+    rendered = "\n".join(line for _y, _x, line, _n in screen.lines)
+    assert "No disk device counters available" in rendered
+    assert "No network interface counters available" in rendered
