@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — System I/O overview panel
+
+- Add F3 panel for per-device disk throughput from `/proc/diskstats` and per-interface network throughput from `/proc/net/dev`.
+- Calculate rates from monotonic counter deltas, clamp counter resets, and keep missing system telemetry from interrupting process collection.
+- Display each device/interface independently instead of combining partitions, virtual devices, or network layers into potentially double-counted totals.
+- Add synthetic parser, collector, reset, unavailable-source, panel-rendering, and keyboard-navigation tests.
+
+
 ## Unreleased — Per-process storage I/O rates
 
 - Parse Linux `/proc/<pid>/io` read/write byte counters and calculate per-process rates from monotonic sample intervals.
