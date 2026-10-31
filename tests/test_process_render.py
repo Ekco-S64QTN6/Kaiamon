@@ -350,3 +350,28 @@ def test_renderer_marks_unknown_process_start_time_as_unavailable(
 
     row = next(line for y, _x, line, _n in ui._stdscr.lines if y == 4)
     assert row.count("—") == 2
+
+def test_renderer_displays_cgroup_path_and_missing_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI(columns=("PID", "CGROUP"))
+    screen = FakeScreen(width=100)
+    ui._stdscr = screen
+    known = ProcessInfo(
+        321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+        0.0, 0.0, 1.0, "worker", 10,
+        cgroup="/system.slice/docker-app.scope",
+    )
+    unknown = ProcessInfo(
+        322, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+        0.0, 0.0, 1.0, "worker-no-cgroup", 11,
+    )
+
+    ui.renderer.draw(ui, ProcessSnapshot(processes=(known, unknown)))
+
+    header = next(line for y, _x, line, _n in screen.lines if y == 3)
+    rows = [line for y, _x, line, _n in screen.lines if y in (4, 5)]
+    assert "CGROUP" in header
+    assert any("/system.slice/docker-app.scope" in row for row in rows)
+    assert any("—" in row for row in rows)
