@@ -18,7 +18,7 @@ from process_config import (
     DEFAULT_COLUMNS, DEFAULT_COLUMN_WIDTHS, SORT_FIELDS, ConfigError, MonitorConfig,
     default_config_path, load_config, normalize_column_widths, normalize_columns, save_config,
 )
-from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
+from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot, ThreadInfo
 from process_input import ProcessInput
 from process_render import ProcessRenderer
 
@@ -184,7 +184,10 @@ class ProcessMonitorUI:
         self.io_panel_scroll = 0
         self.thread_panel_mode = False
         self.thread_panel_scroll = 0
+        self.thread_selected = 0
+        self.thread_selected_tid: int | None = None
         self.thread_target_pid: int | None = None
+        self.thread_target_start_ticks: int | None = None
         self.filter_query = ""
         self.collapsed: set[int] = set()
         self.status = (
@@ -250,6 +253,42 @@ class ProcessMonitorUI:
                 filtered, self.sort_field, self.descending,
             )
         )
+
+    def _thread_rows(self, snapshot: ProcessSnapshot) -> tuple[ThreadInfo, ...]:
+        """Return CPU-sorted threads while keeping selection attached to its TID."""
+        rows = tuple(sorted(
+            snapshot.threads,
+            key=lambda thread: (thread.cpu_percent, thread.tid),
+            reverse=True,
+        ))
+        if not rows:
+            self.thread_selected = 0
+            self.thread_selected_tid = None
+            return ()
+
+        selected_index = (
+            next(
+                (
+                    index for index, thread in enumerate(rows)
+                    if thread.tid == self.thread_selected_tid
+                ),
+                None,
+            )
+            if self.thread_selected_tid is not None else None
+        )
+        if selected_index is not None:
+            self.thread_selected = selected_index
+        else:
+            self.thread_selected = min(
+                max(0, self.thread_selected), len(rows) - 1,
+            )
+            new_tid = rows[self.thread_selected].tid
+            if self.thread_selected_tid is not None:
+                self.status = (
+                    f"Selected thread exited; now selecting TID {new_tid}"
+                )
+            self.thread_selected_tid = new_tid
+        return rows
 
     def _draw(self, snapshot: ProcessSnapshot) -> None:
         self.renderer.draw(self, snapshot)

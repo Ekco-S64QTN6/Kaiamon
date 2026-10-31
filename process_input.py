@@ -4,7 +4,10 @@ from __future__ import annotations
 import curses
 from typing import Any
 
-from process_actions import SIGNAL_CHOICES, renice_process, signal_process
+from process_actions import (
+    SIGNAL_CHOICES, renice_process, renice_thread, signal_process,
+    validate_nice_value,
+)
 from process_affinity import ProcessAffinityEditor
 from process_config import SORT_FIELDS
 from process_setup import ProcessSetup
@@ -66,23 +69,65 @@ class ProcessInput:
 
     def handle_key(self, ui: Any, key: int) -> None:
         if ui.thread_panel_mode:
+            thread_rows = ui._thread_rows(ui.collector.get_snapshot())
+
             if key in (curses.KEY_F4, 27):
                 ui.thread_panel_mode = False
                 ui.thread_target_pid = None
+                ui.thread_target_start_ticks = None
+                ui.thread_selected_tid = None
                 ui.collector.set_thread_target(None)
                 ui.status = "Process table"
             elif key in (curses.KEY_UP, ord("k")):
-                ui.thread_panel_scroll = max(0, ui.thread_panel_scroll - 1)
+                ui.thread_selected = max(0, ui.thread_selected - 1)
             elif key in (curses.KEY_DOWN, ord("j")):
-                ui.thread_panel_scroll += 1
+                ui.thread_selected = min(
+                    max(0, len(thread_rows) - 1), ui.thread_selected + 1,
+                )
             elif key == curses.KEY_PPAGE:
-                ui.thread_panel_scroll = max(0, ui.thread_panel_scroll - 10)
+                ui.thread_selected = max(0, ui.thread_selected - 10)
             elif key == curses.KEY_NPAGE:
-                ui.thread_panel_scroll += 10
+                ui.thread_selected = min(
+                    max(0, len(thread_rows) - 1), ui.thread_selected + 10,
+                )
             elif key == curses.KEY_HOME:
-                ui.thread_panel_scroll = 0
+                ui.thread_selected = 0
             elif key == curses.KEY_END:
-                ui.thread_panel_scroll = 10**6
+                ui.thread_selected = max(0, len(thread_rows) - 1)
+            elif key in (ord("r"), ord("R")):
+                if not thread_rows or ui.thread_target_pid is None:
+                    ui.status = "No readable thread selected"
+                    return
+                thread = thread_rows[ui.thread_selected]
+                try:
+                    requested_nice = int(ui._prompt(
+                        f"Set nice for TID {thread.tid} [-20..19]: "
+                    ))
+                    validate_nice_value(requested_nice)
+                    confirmation = ui._prompt(
+                        f"Renice TID {thread.tid} to {requested_nice}? [y/N]: "
+                    )
+                    if confirmation.casefold() != "y":
+                        ui.status = f"Renice cancelled for TID {thread.tid}"
+                        return
+                    if ui.thread_target_start_ticks is None:
+                        raise ValueError("thread target identity is unavailable")
+                    actual_nice = renice_thread(
+                        ui.thread_target_pid,
+                        thread.tid,
+                        ui.thread_target_start_ticks,
+                        thread.start_ticks,
+                        requested_nice,
+                    )
+                    ui.status = f"Reniced TID {thread.tid} to {actual_nice}"
+                except (ValueError, OSError, PermissionError) as exc:
+                    ui.status = f"Thread renice failed: {exc}"
+            if thread_rows and key in (
+                curses.KEY_UP, curses.KEY_DOWN, curses.KEY_PPAGE,
+                curses.KEY_NPAGE, curses.KEY_HOME, curses.KEY_END,
+                ord("k"), ord("j"),
+            ):
+                ui.thread_selected_tid = thread_rows[ui.thread_selected].tid
             return
 
         if ui.system_io_mode:
@@ -129,8 +174,11 @@ class ProcessInput:
             else:
                 ui.thread_panel_mode = True
                 ui.thread_panel_scroll = 0
+                ui.thread_selected = 0
+                ui.thread_selected_tid = None
                 ui.thread_target_pid = process.pid
-                ui.collector.set_thread_target(process.pid)
+                ui.thread_target_start_ticks = process.start_ticks
+                ui.collector.set_thread_target(process.pid, process.start_ticks)
                 ui.status = f"Threads for PID {process.pid} — sampling this process only"
         elif key == curses.KEY_F8:
             process = ui._selected_process()

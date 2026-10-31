@@ -203,6 +203,7 @@ def test_renderer_displays_selected_process_thread_cpu_rows(
     ui = ProcessMonitorUI()
     ui.thread_panel_mode = True
     ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = 10
     ui._stdscr = FakeScreen(height=18, width=100)
     snapshot = ProcessSnapshot(
         processes=(ProcessInfo(
@@ -225,6 +226,7 @@ def test_renderer_displays_selected_process_thread_cpu_rows(
     assert "worker" in rendered
     assert "2 threads for PID 321" in rendered
     assert "F4/Esc Process table" in rendered
+    assert "r Renice thread" in rendered
 
 
 def test_renderer_handles_exited_thread_target(
@@ -241,3 +243,35 @@ def test_renderer_handles_exited_thread_target(
     rendered = "\n".join(line for _y, _x, line, _n in ui._stdscr.lines)
     assert "THREADS OF PID 999" in rendered
     assert "No readable threads for this process yet." in rendered
+
+def test_thread_renderer_keeps_selected_tid_highlight_when_cpu_order_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = 10
+    ui.thread_selected = 1
+    ui.thread_selected_tid = 323
+    ui._stdscr = FakeScreen(height=18, width=100)
+    snapshot = ProcessSnapshot(
+        processes=(ProcessInfo(
+            321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+            0.0, 0.0, 3.0, "python worker.py", 10,
+        ),),
+        threads=(
+            ThreadInfo(322, 321, "R", 20, 0, 5.0, 3.0, "busy-worker", 200),
+            ThreadInfo(323, 321, "S", 20, 0, 95.0, 2.0, "selected-worker", 300),
+        ),
+    )
+
+    ui.renderer.draw(ui, snapshot)
+
+    assert ui.thread_selected == 0
+    assert ui.thread_selected_tid == 323
+    selected_line = next(
+        item for item in ui._stdscr.lines
+        if item[0] == 4 and item[3] > 0
+    )
+    assert "selected-worker" in selected_line[2]

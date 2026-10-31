@@ -216,15 +216,17 @@ class ProcessRenderer:
     def _draw_threads(
         self, ui: Any, snapshot: ProcessSnapshot, height: int, width: int,
     ) -> None:
-        """Render thread CPU usage for the single process selected in the inspector."""
+        """Render and select threads for the single process in the inspector."""
         target_pid = ui.thread_target_pid
         owner = next(
             (process for process in snapshot.processes if process.pid == target_pid),
             None,
         )
         title = f"THREADS OF PID {target_pid}"
-        if owner is not None:
+        if owner is not None and owner.start_ticks == ui.thread_target_start_ticks:
             title += f"  {owner.command}"
+        else:
+            title += "  (process exited or PID reused)"
         ui._put(2, 0, title[:width], curses.color_pair(3) | curses.A_BOLD)
         ui._put(
             3, 0,
@@ -232,11 +234,7 @@ class ProcessRenderer:
             curses.A_REVERSE | curses.A_BOLD,
         )
 
-        threads = sorted(
-            snapshot.threads,
-            key=lambda thread: (thread.cpu_percent, thread.tid),
-            reverse=True,
-        )
+        threads = ui._thread_rows(snapshot)
         body_height = max(0, height - 6)
         if not threads:
             rows = [
@@ -252,11 +250,23 @@ class ProcessRenderer:
                 for thread in threads
             ]
         max_scroll = max(0, len(rows) - body_height)
-        ui.thread_panel_scroll = min(max(0, ui.thread_panel_scroll), max_scroll)
+        ui.thread_panel_scroll = min(
+            max(0, ui.thread_panel_scroll), max_scroll,
+        )
+        if threads:
+            if ui.thread_selected < ui.thread_panel_scroll:
+                ui.thread_panel_scroll = ui.thread_selected
+            elif ui.thread_selected >= ui.thread_panel_scroll + body_height:
+                ui.thread_panel_scroll = ui.thread_selected - body_height + 1
         for offset, line in enumerate(
             rows[ui.thread_panel_scroll:ui.thread_panel_scroll + body_height]
         ):
-            ui._put(4 + offset, 0, line[:width])
+            row_index = ui.thread_panel_scroll + offset
+            attr = (
+                curses.color_pair(5)
+                if threads and row_index == ui.thread_selected else 0
+            )
+            ui._put(4 + offset, 0, line[:width], attr)
 
         ui._put(
             height - 2, 0,
@@ -266,6 +276,6 @@ class ProcessRenderer:
         )
         ui._put(
             height - 1, 0,
-            "F4/Esc Process table  ↑/↓ Scroll  PgUp/PgDn  q Quit"[:width],
+            "F4/Esc Process table  ↑/↓ Select  PgUp/PgDn  r Renice thread  q Quit"[:width],
             curses.A_DIM,
         )
