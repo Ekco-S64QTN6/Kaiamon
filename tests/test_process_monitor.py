@@ -264,6 +264,10 @@ def test_sort_processes_orders_by_selected_metric() -> None:
         replace(rows[1], io_read_rate=500.0),
     )
     assert [p.pid for p in sort_processes(io_rows, "IO_READ")] == [20, 10]
+    write_rows = tuple(
+        replace(process, io_write_rate=process.pid * 10.0) for process in rows
+    )
+    assert [p.pid for p in sort_processes(write_rows, "IO_WRITE")] == [20, 10]
     with pytest.raises(ValueError):
         sort_processes(rows, "NOPE")
 
@@ -449,6 +453,7 @@ def test_column_parser_preserves_order_and_accepts_display_aliases() -> None:
         "COMMAND", "PID", "CPU", "STATE", "TIME",
     )
     assert DEFAULT_COLUMNS[-1] == "COMMAND"
+    assert parse_columns("IOR/s,IOW/s") == ("IO_READ", "IO_WRITE")
     with pytest.raises(argparse.ArgumentTypeError, match="unsupported column"):
         parse_columns("PID,NOT_A_COLUMN")
     with pytest.raises(argparse.ArgumentTypeError, match="duplicates"):
