@@ -5,7 +5,7 @@ import curses
 from typing import Any
 
 from process_config import (
-    DEFAULT_COLUMNS, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH,
+    AVAILABLE_COLUMNS, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH,
 )
 
 
@@ -19,7 +19,7 @@ class ProcessSetup:
             return
 
         order = list(ui.columns)
-        order.extend(column for column in DEFAULT_COLUMNS if column not in order)
+        order.extend(column for column in AVAILABLE_COLUMNS if column not in order)
         enabled = set(ui.columns)
         widths = dict(ui.column_widths)
         original_widths = dict(ui.column_widths)
