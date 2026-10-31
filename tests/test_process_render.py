@@ -108,3 +108,27 @@ def test_renderer_keeps_reordered_columns_in_fixed_width_layout(
     assert "PID" in header
     assert "CPU%" in header
     assert ui.horizontal_scroll == 0
+
+def test_renderer_uses_persisted_custom_column_widths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI(
+        columns=("PID", "COMMAND"),
+        column_widths={"PID": 10, "COMMAND": 40},
+    )
+    screen = FakeScreen(width=80)
+    ui._stdscr = screen
+    process = ProcessInfo(
+        321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+        0.0, 0.0, 1.0, "custom-width-command", 10,
+    )
+
+    ui.renderer.draw(ui, ProcessSnapshot(processes=(process,)))
+
+    header = next(line for y, _x, line, _n in screen.lines if y == 3)
+    row = next(line for y, _x, line, _n in screen.lines if y == 4)
+    assert header.startswith("       PID")
+    assert header[11:].startswith("COMMAND")
+    assert row.startswith("       321")
+    assert "custom-width-command" in row

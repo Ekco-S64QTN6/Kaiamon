@@ -5,6 +5,7 @@ from typing import Any
 
 import curses
 
+from process_config import DEFAULT_COLUMN_WIDTHS
 from process_core import ProcessSnapshot
 
 COLUMN_LABELS = {
@@ -12,10 +13,7 @@ COLUMN_LABELS = {
     "VIRT": "VIRT", "RES": "RES", "SHR": "SHR", "STATE": "S",
     "CPU": "CPU%", "MEM": "MEM%", "TIME": "TIME+", "COMMAND": "COMMAND",
 }
-COLUMN_WIDTHS = {
-    "PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7,
-    "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24,
-}
+COLUMN_WIDTHS = dict(DEFAULT_COLUMN_WIDTHS)
 RIGHT_ALIGNED_COLUMNS = frozenset({"PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME"})
 
 
@@ -69,7 +67,7 @@ class ProcessRenderer:
             + f"  Filter:{ui.filter_query or '—'}"
         )
         ui._put(2, 0, mode[:width], curses.color_pair(3))
-        table_width = sum(COLUMN_WIDTHS[column] for column in ui.columns)
+        table_width = sum(ui.column_widths[column] for column in ui.columns)
         table_width += max(0, len(ui.columns) - 1)
         max_scroll = max(0, table_width - width)
         ui.horizontal_scroll = min(max(0, ui.horizontal_scroll), max_scroll)
@@ -77,7 +75,7 @@ class ProcessRenderer:
 
         header_cells = []
         for column in ui.columns:
-            cell_width = COLUMN_WIDTHS[column]
+            cell_width = ui.column_widths[column]
             alignment = "<" if column == "COMMAND" else ">"
             label = COLUMN_LABELS[column][:cell_width]
             header_cells.append(f"{label:{alignment}{cell_width}}")
@@ -123,7 +121,7 @@ class ProcessRenderer:
                 values[target] = indent + values[target]
             cells = []
             for column in ui.columns:
-                cell_width = COLUMN_WIDTHS[column]
+                cell_width = ui.column_widths[column]
                 alignment = (
                     "<" if column == "COMMAND"
                     else (">" if column in RIGHT_ALIGNED_COLUMNS else "<")

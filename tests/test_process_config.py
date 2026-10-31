@@ -7,10 +7,12 @@ import pytest
 
 from process_config import (
     DEFAULT_COLUMNS,
+    DEFAULT_COLUMN_WIDTHS,
     ConfigError,
     MonitorConfig,
     default_config_path,
     load_config,
+    normalize_column_widths,
     normalize_columns,
     save_config,
 )
@@ -47,6 +49,10 @@ def test_config_round_trips_and_creates_parent_directories(tmp_path: Path) -> No
         sort_field="MEM",
         descending=False,
         tree_mode=True,
+        column_widths=tuple(
+            (column, 9 if column == "PID" else 40 if column == "COMMAND" else width)
+            for column, width in DEFAULT_COLUMN_WIDTHS
+        ),
     )
 
     save_config(path, expected)
@@ -76,6 +82,11 @@ def test_config_file_is_created_with_private_permissions(tmp_path: Path) -> None
         ('{"sort_field": "NOPE"}', "sort_field"),
         ('{"descending": "yes"}', "descending"),
         ('{"tree_mode": 1}', "tree_mode"),
+        ('{"column_widths": []}', "JSON object"),
+        ('{"column_widths": {"NOPE": 10}}', "unsupported"),
+        ('{"column_widths": {"PID": true}}', "integer"),
+        ('{"column_widths": {"PID": 0}}', "between 1 and 120"),
+        ('{"column_widths": {"PID": 121}}', "between 1 and 120"),
     ],
 )
 def test_invalid_config_is_rejected(
@@ -94,6 +105,24 @@ def test_column_normalization_supports_aliases_and_rejects_bad_shapes() -> None:
     )
     with pytest.raises(ValueError, match="non-string"):
         normalize_columns(["PID", 3])
+
+
+def test_column_width_normalization_fills_defaults_and_accepts_aliases() -> None:
+    widths = dict(normalize_column_widths({"CPU%": 11, "command": 50}))
+
+    assert widths["CPU"] == 11
+    assert widths["COMMAND"] == 50
+    assert widths["PID"] == dict(DEFAULT_COLUMN_WIDTHS)["PID"]
+
+    with pytest.raises(ValueError, match="duplicate"):
+        normalize_column_widths({"CPU": 7, "CPU%": 8})
+
+
+def test_legacy_version_one_config_defaults_column_widths(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.json"
+    path.write_text('{"version": 1, "columns": ["PID"]}', encoding="utf-8")
+
+    assert load_config(path).column_widths == DEFAULT_COLUMN_WIDTHS
 
 
 def test_cli_overrides_saved_values_and_persists_runtime_preferences(
@@ -121,6 +150,7 @@ def test_cli_overrides_saved_values_and_persists_runtime_preferences(
             "tree_mode": ui.tree_mode,
         })
         # Simulate preferences changed interactively during the session.
+        ui.column_widths["PID"] = 10
         ui.sort_field = "TIME"
         ui.descending = True
         ui.tree_mode = False
@@ -149,6 +179,10 @@ def test_cli_overrides_saved_values_and_persists_runtime_preferences(
         sort_field="TIME",
         descending=True,
         tree_mode=False,
+        column_widths=tuple(
+            (column, 10 if column == "PID" else width)
+            for column, width in DEFAULT_COLUMN_WIDTHS
+        ),
     )
 
 
@@ -211,6 +245,7 @@ def test_cli_loads_saved_preferences_without_overrides(
     assert ui.sort_field == expected.sort_field
     assert ui.descending is expected.descending
     assert ui.tree_mode is expected.tree_mode
+    assert ui.column_widths == dict(expected.column_widths)
 
 
 def test_cli_reports_invalid_config_before_starting_ui(

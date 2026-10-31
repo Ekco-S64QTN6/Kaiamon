@@ -4,14 +4,16 @@ from __future__ import annotations
 import curses
 from typing import Any
 
-from process_config import DEFAULT_COLUMNS
+from process_config import (
+    DEFAULT_COLUMNS, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH,
+)
 
 
 class ProcessSetup:
-    """Edit visible columns and their order without restarting the monitor."""
+    """Edit visible columns, display order, and widths without restarting."""
 
     def edit(self, ui: Any) -> None:
-        """Open the column editor; Enter applies and Escape discards changes."""
+        """Open the editor; Enter applies and Escape discards all staged changes."""
         screen = ui._stdscr
         if screen is None:
             return
@@ -19,13 +21,15 @@ class ProcessSetup:
         order = list(ui.columns)
         order.extend(column for column in DEFAULT_COLUMNS if column not in order)
         enabled = set(ui.columns)
+        widths = dict(ui.column_widths)
+        original_widths = dict(ui.column_widths)
         selected = 0
-        message = "Space: show/hide   Left/Right: reorder   Enter: apply   Esc: cancel"
+        message = "Space: show/hide   Left/Right: reorder   +/-: width"
 
         screen.timeout(-1)
         try:
             while True:
-                self._draw(screen, order, enabled, selected, message)
+                self._draw(screen, order, enabled, widths, selected, message)
                 key = screen.getch()
 
                 if key == 27:
@@ -35,10 +39,14 @@ class ProcessSetup:
                     columns = tuple(column for column in order if column in enabled)
                     if columns:
                         ui.columns = columns
+                        ui.column_widths = widths
                         ui.horizontal_scroll = 0
                         ui.selected = 0
                         ui.scroll = 0
-                        ui.status = "Columns configured: " + ", ".join(columns)
+                        if widths != original_widths:
+                            ui.status = "Column layout and widths configured"
+                        else:
+                            ui.status = "Columns configured: " + ", ".join(columns)
                     return
                 if key in (curses.KEY_UP, ord("k")):
                     selected = max(0, selected - 1)
@@ -73,6 +81,14 @@ class ProcessSetup:
                         )
                         selected += 1
                         message = f"Moved {order[selected]} right"
+                elif key in (ord("+"), ord("=")):
+                    column = order[selected]
+                    widths[column] = min(MAX_COLUMN_WIDTH, widths[column] + 1)
+                    message = f"{column} width: {widths[column]} characters"
+                elif key in (ord("-"), ord("_")):
+                    column = order[selected]
+                    widths[column] = max(MIN_COLUMN_WIDTH, widths[column] - 1)
+                    message = f"{column} width: {widths[column]} characters"
         finally:
             # Match the monitor's normal non-blocking frame/input cadence.
             screen.timeout(100)
@@ -80,7 +96,7 @@ class ProcessSetup:
     @staticmethod
     def _draw(
         screen: Any, order: list[str], enabled: set[str],
-        selected: int, message: str,
+        widths: dict[str, int], selected: int, message: str,
     ) -> None:
         screen.erase()
         height, width = screen.getmaxyx()
@@ -97,7 +113,8 @@ class ProcessSetup:
         write(0, "Kaiamon setup — process columns", curses.A_BOLD)
         write(1, "Up/Down or j/k: select   Home/End: jump")
         write(2, "Space: show/hide   Left/Right: reorder")
-        visible_rows = max(1, height - 6)
+        write(3, f"- / +: change selected width ({MIN_COLUMN_WIDTH}–{MAX_COLUMN_WIDTH})")
+        visible_rows = max(1, height - 7)
         first = max(0, min(
             selected - visible_rows // 2,
             len(order) - visible_rows,
@@ -105,7 +122,7 @@ class ProcessSetup:
         for offset, column in enumerate(order[first:first + visible_rows]):
             marker = "[x]" if column in enabled else "[ ]"
             attr = curses.A_REVERSE | curses.A_BOLD if first + offset == selected else 0
-            write(4 + offset, f"{marker} {column}", attr)
+            write(5 + offset, f"{marker} {column:<8} {widths[column]:>3} chars", attr)
         write(height - 2, message, curses.A_BOLD)
         write(height - 1, "Enter apply   Esc cancel")
         screen.refresh()

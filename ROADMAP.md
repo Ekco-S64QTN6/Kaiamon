@@ -18,10 +18,11 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 - [x] Extract immutable process models, typed `/proc` parsers, CPU calculations, and the polling collector into curses-independent `process_core.py`.
 - [x] Extract process-action validation and OS calls into curses-independent `process_actions.py`.
 - [x] Extract keyboard dispatch, tree-expansion commands, and prompts into `process_input.py` while keeping all curses operations on the main thread.
-- [x] Add horizontal process-table scrolling so narrow terminals and reordered column sets can access every configured field without changing column widths.
+- [x] Add horizontal process-table scrolling so narrow terminals and reordered column sets can access every configured field without altering the configured widths.
 - [x] Preserve matching processes' ancestor paths when filtering in tree mode, without including unrelated siblings or descendants.
 - [x] Load and atomically save versioned XDG JSON preferences for refresh interval, columns, sorting, and tree mode, with CLI overrides.
 - [x] Add an interactive F2 column setup screen to toggle visible columns and reorder them without restarting.
+- [x] Add per-column width editing (1–120 characters) to F2 setup and persist widths in the existing version-1 configuration format with backward-compatible defaults.
 
 ## Next
 
@@ -36,7 +37,7 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 - CPU affinity and other scheduler controls.
 - I/O, disk, network, and GPU process monitoring.
 - Cross-platform backends and plugin architecture.
-- Full htop configuration/setup parity beyond the initial interactive column editor.
+- Full htop configuration/setup parity beyond the initial editable column layout (for example, configurable meters, colors, and header arrangement).
 
 ## Acceptance criteria for calling this an htop replacement
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import curses
 
+from process_config import DEFAULT_COLUMN_WIDTHS, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH
 from process_setup import ProcessSetup
 
 
@@ -35,6 +36,7 @@ class FakeScreen:
 class FakeUI:
     def __init__(self, columns: tuple[str, ...], screen: FakeScreen) -> None:
         self.columns = columns
+        self.column_widths = dict(DEFAULT_COLUMN_WIDTHS)
         self._stdscr = screen
         self.horizontal_scroll = 16
         self.selected = 4
@@ -67,13 +69,40 @@ def test_setup_can_enable_a_previously_hidden_column() -> None:
     assert ui.columns == ("PID", "USER")
 
 
-def test_escape_discards_setup_changes() -> None:
-    screen = FakeScreen([ord(" "), 27])
+def test_setup_adjusts_widths_and_applies_them_with_layout() -> None:
+    screen = FakeScreen([ord("+"), ord("+"), curses.KEY_DOWN, ord("-"), 10])
+    ui = FakeUI(("PID", "USER"), screen)
+
+    ProcessSetup().edit(ui)
+
+    assert ui.column_widths["PID"] == 8
+    assert ui.column_widths["USER"] == 7
+    assert ui.status == "Column layout and widths configured"
+    assert screen.timeouts == [-1, 100]
+    assert any("8 chars" in line for line in screen.writes)
+
+
+def test_setup_width_adjustment_respects_minimum_and_maximum() -> None:
+    screen = FakeScreen([ord("-"), curses.KEY_DOWN, ord("+"), 10])
+    ui = FakeUI(("PID", "USER"), screen)
+    ui.column_widths["PID"] = MIN_COLUMN_WIDTH
+    ui.column_widths["USER"] = MAX_COLUMN_WIDTH
+
+    ProcessSetup().edit(ui)
+
+    assert ui.column_widths["PID"] == MIN_COLUMN_WIDTH
+    assert ui.column_widths["USER"] == MAX_COLUMN_WIDTH
+
+
+def test_escape_discards_column_and_width_changes() -> None:
+    screen = FakeScreen([ord(" "), ord("+"), 27])
     ui = FakeUI(("PID", "COMMAND"), screen)
+    original_widths = dict(ui.column_widths)
 
     ProcessSetup().edit(ui)
 
     assert ui.columns == ("PID", "COMMAND")
+    assert ui.column_widths == original_widths
     assert ui.status == "Column setup cancelled"
     assert screen.timeouts == [-1, 100]
 

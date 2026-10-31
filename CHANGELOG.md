@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Editable and persistent column widths
+
+- Extend the F2 setup screen with per-column width controls using `-` and `+`, bounded to 1–120 characters.
+- Render configured widths immediately and save them with the existing XDG preferences.
+- Extend version-1 config validation while keeping older files valid with default widths.
+- Add tests for width normalization, invalid values, legacy-config defaults, editor apply/cancel/bounds, runtime loading, and renderer layout.
+
 ## Unreleased — Interactive column setup
 
 - Add an F2 setup screen to show or hide process columns and reorder their display without restarting.

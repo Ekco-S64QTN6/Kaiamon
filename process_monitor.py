@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from process_config import (
-    DEFAULT_COLUMNS, SORT_FIELDS, ConfigError, MonitorConfig,
-    default_config_path, load_config, normalize_columns, save_config,
+    DEFAULT_COLUMNS, DEFAULT_COLUMN_WIDTHS, SORT_FIELDS, ConfigError, MonitorConfig,
+    default_config_path, load_config, normalize_column_widths, normalize_columns, save_config,
 )
 from process_core import POLL_INTERVAL, ProcessCollector, ProcessInfo, ProcessSnapshot
 from process_input import ProcessInput
@@ -157,11 +157,16 @@ class ProcessMonitorUI:
     def __init__(
         self, *, refresh_interval: float = POLL_INTERVAL,
         columns: Sequence[str] = DEFAULT_COLUMNS,
+        column_widths: Mapping[str, int] | None = None,
         sort_field: str = "CPU", descending: bool = True,
         tree_mode: bool = False,
     ) -> None:
         self.refresh_interval = parse_refresh_interval(str(refresh_interval))
         self.columns = parse_columns(",".join(columns))
+        width_values = (
+            dict(DEFAULT_COLUMN_WIDTHS) if column_widths is None else column_widths
+        )
+        self.column_widths = dict(normalize_column_widths(width_values))
         self.sort_field = sort_field.upper()
         if self.sort_field not in SORT_FIELDS:
             raise ValueError(f"unsupported sort field: {self.sort_field}")
@@ -340,6 +345,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             args.refresh if args.refresh is not None else stored.refresh_interval
         ),
         columns=args.columns if args.columns is not None else stored.columns,
+        column_widths=dict(stored.column_widths),
         sort_field=args.sort if args.sort is not None else stored.sort_field,
         descending=(
             stored.descending if args.sort_order is None
@@ -358,6 +364,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             sort_field=ui.sort_field,
             descending=ui.descending,
             tree_mode=ui.tree_mode,
+            column_widths=tuple(ui.column_widths.items()),
         )
         try:
             save_config(config_path, updated)
