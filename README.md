@@ -122,7 +122,7 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 **Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
-**Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its visible columns and sampling interval are configured at launch; filtering is substring-based; per-core meters are compact and limited to the first eight cores shown.
+**Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its visible columns and sampling interval are configured at launch; filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
 **Not yet implemented:** full htop setup/configuration screens, interactive column-width editing, process/thread toggles, CPU affinity, I/O and disk/network meters, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
 
