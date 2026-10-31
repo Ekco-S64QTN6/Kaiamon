@@ -68,6 +68,15 @@ class ProcessRenderer:
             + f"  Filter:{ui.filter_query or '—'}"
         )
         ui._put(2, 0, mode[:width], curses.color_pair(3))
+        if ui.system_io_mode:
+            ui._put(
+                2, 0, "SYSTEM I/O  —  per-device disk and per-interface network rates",
+                curses.color_pair(3) | curses.A_BOLD,
+            )
+            self._draw_system_io(ui, snapshot, height, width)
+            screen.refresh()
+            return
+
         table_width = sum(ui.column_widths[column] for column in ui.columns)
         table_width += max(0, len(ui.columns) - 1)
         max_scroll = max(0, table_width - width)
@@ -147,3 +156,53 @@ class ProcessRenderer:
             curses.A_DIM,
         )
         screen.refresh()
+
+    def _draw_system_io(
+        self, ui: Any, snapshot: ProcessSnapshot, height: int, width: int,
+    ) -> None:
+        """Render per-device and per-interface throughput without aggregating layers."""
+        lines = ["BLOCK DEVICES  (read / write)"]
+        if snapshot.disk_io:
+            for item in snapshot.disk_io:
+                read_rate = ui._fmt_rate(item.read_bytes_s)
+                write_rate = ui._fmt_rate(item.write_bytes_s)
+                lines.append(
+                    f"{item.device[:16]:<16} read {read_rate:>8}  write {write_rate:>8}"
+                )
+        else:
+            lines.append("No disk device counters available")
+
+        lines.append("")
+        lines.append("NETWORK INTERFACES  (receive / transmit)")
+        if snapshot.network_io:
+            for item in snapshot.network_io:
+                receive_rate = ui._fmt_rate(item.receive_bytes_s)
+                transmit_rate = ui._fmt_rate(item.transmit_bytes_s)
+                lines.append(
+                    f"{item.interface[:16]:<16} RX {receive_rate:>8}  TX {transmit_rate:>8}"
+                )
+        else:
+            lines.append("No network interface counters available")
+
+        first_body_row = 4
+        body_height = max(0, height - 6)
+        max_scroll = max(0, len(lines) - body_height)
+        ui.io_panel_scroll = min(max(0, ui.io_panel_scroll), max_scroll)
+        for offset, line in enumerate(
+            lines[ui.io_panel_scroll:ui.io_panel_scroll + body_height]
+        ):
+            attr = curses.A_BOLD if line.startswith(
+                ("BLOCK DEVICES", "NETWORK INTERFACES")
+            ) else 0
+            ui._put(first_body_row + offset, 0, line[:width], attr)
+
+        ui._put(
+            height - 2, 0, ui.status[:width], curses.color_pair(2),
+        )
+        ui._put(
+            height - 1, 0,
+            f"{len(snapshot.disk_io)} block devices  |  "
+            f"{len(snapshot.network_io)} interfaces  |  "
+            "F3/Esc Process table  ↑/↓ Scroll  q Quit"[:width],
+            curses.A_DIM,
+        )
