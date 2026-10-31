@@ -8,6 +8,9 @@ from __future__ import annotations
 import os
 import signal
 from collections.abc import Iterable
+from pathlib import Path
+
+from process_core import parse_proc_stat
 
 
 SIGNAL_CHOICES: dict[str, tuple[int, str]] = {
@@ -88,3 +91,49 @@ def set_process_affinity(pid: int, cpus: Iterable[int]) -> frozenset[int]:
     if not effective:
         raise OSError(f"PID {pid} has no available CPUs after applying affinity")
     return effective
+
+
+
+def renice_thread(
+    tgid: int,
+    tid: int,
+    expected_tgid_start_ticks: int,
+    expected_tid_start_ticks: int,
+    nice: int,
+    *,
+    proc_root: str | Path = "/proc",
+) -> int:
+    """Renice one verified Linux thread, rejecting stale or reused identifiers."""
+    validate_process_target(tgid)
+    if isinstance(tid, bool) or not isinstance(tid, int) or tid <= 1:
+        raise ValueError("TID must identify a non-system thread greater than 1")
+    for name, value in (
+        ("process", expected_tgid_start_ticks),
+        ("thread", expected_tid_start_ticks),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"expected {name} start ticks must be a non-negative integer")
+    nice_value = validate_nice_value(nice)
+
+    root = Path(proc_root)
+    try:
+        process_stat = parse_proc_stat((root / str(tgid) / "stat").read_text())
+        thread_stat = parse_proc_stat(
+            (root / str(tgid) / "task" / str(tid) / "stat").read_text()
+        )
+    except OSError as exc:
+        raise OSError(f"cannot verify TID {tid} in process {tgid}: {exc}") from exc
+
+    if (
+        process_stat["pid"] != tgid
+        or process_stat["start_ticks"] != expected_tgid_start_ticks
+    ):
+        raise ValueError(f"PID {tgid} exited or was reused; thread nice was not changed")
+    if (
+        thread_stat["pid"] != tid
+        or thread_stat["start_ticks"] != expected_tid_start_ticks
+    ):
+        raise ValueError(f"TID {tid} exited or was reused; thread nice was not changed")
+
+    os.setpriority(os.PRIO_PROCESS, tid, nice_value)
+    return os.getpriority(os.PRIO_PROCESS, tid)
