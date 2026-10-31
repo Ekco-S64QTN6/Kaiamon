@@ -226,3 +226,22 @@ def test_cli_reports_invalid_config_before_starting_ui(
         main(["--config", str(path)])
 
     assert error.value.code == 2
+
+
+def test_failed_atomic_replace_keeps_existing_config_and_cleans_temp_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    original = MonitorConfig(refresh_interval=0.5, sort_field="PID")
+    save_config(path, original)
+
+    def fail_replace(_source: object, _destination: object) -> None:
+        raise OSError("simulated filesystem error")
+
+    monkeypatch.setattr("process_config.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="simulated filesystem error"):
+        save_config(path, MonitorConfig(refresh_interval=0.25, sort_field="MEM"))
+
+    assert load_config(path) == original
+    assert list(tmp_path.glob(".config.json.*.tmp")) == []
