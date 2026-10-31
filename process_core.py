@@ -266,7 +266,9 @@ class ProcessCollector:
         self._previous_disk: dict[tuple[int, int], tuple[int, int, float]] = {}
         self._previous_network: dict[str, tuple[int, int, float]] = {}
         self._thread_target_pid: int | None = None
+        self._thread_target_start_ticks: int | None = None
         self._previous_thread_target_pid: int | None = None
+        self._previous_thread_target_start_ticks: int | None = None
         self._previous_threads: dict[int, tuple[int, int]] = {}
         self._previous_cpu: tuple[CpuTimes, ...] | None = None
 
@@ -295,16 +297,29 @@ class ProcessCollector:
         with self._lock:
             return self._snapshot
 
-    def set_thread_target(self, pid: int | None) -> None:
-        """Collect thread counters for one process, or disable thread sampling."""
-        if pid is not None and (isinstance(pid, bool) or pid <= 0):
+    def set_thread_target(
+        self, pid: int | None, start_ticks: int | None = None,
+    ) -> None:
+        """Collect threads for one PID identity, or disable thread sampling."""
+        if pid is None:
+            if start_ticks is not None:
+                raise ValueError("thread start ticks require a target PID")
+        elif isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
             raise ValueError("thread target PID must be a positive integer")
+        if start_ticks is not None and (
+            isinstance(start_ticks, bool)
+            or not isinstance(start_ticks, int)
+            or start_ticks < 0
+        ):
+            raise ValueError("thread target start ticks must be a non-negative integer")
         self._thread_target_pid = pid
+        self._thread_target_start_ticks = start_ticks
 
     def collect_once(self) -> ProcessSnapshot:
         """Collect one sample; public to make fixture-based tests deterministic."""
         sample_monotonic = self._monotonic_clock()
         thread_target_pid = self._thread_target_pid
+        thread_target_start_ticks = self._thread_target_start_ticks
         cpu_samples = parse_cpu_times((self.proc_root / "stat").read_text())
         mem_total, mem_used = self._read_memory()
         previous_cpu = self._previous_cpu
@@ -411,11 +426,24 @@ class ProcessCollector:
                 continue
         self._previous_process = current_previous
         self._previous_io = current_io
+        target_process = next(
+            (
+                process for process in processes
+                if process.pid == thread_target_pid
+                and (
+                    thread_target_start_ticks is None
+                    or process.start_ticks == thread_target_start_ticks
+                )
+            ),
+            None,
+        )
         threads = (
-            self._sample_threads(thread_target_pid, cpu_samples, previous_cpu)
-            if thread_target_pid is not None
-            and any(process.pid == thread_target_pid for process in processes)
-            else self._sample_threads(None, cpu_samples, previous_cpu)
+            self._sample_threads(
+                thread_target_pid, thread_target_start_ticks,
+                cpu_samples, previous_cpu,
+            )
+            if target_process is not None and thread_target_pid is not None
+            else self._sample_threads(None, None, cpu_samples, previous_cpu)
         )
         snapshot = ProcessSnapshot(
             processes=tuple(processes),
@@ -435,13 +463,18 @@ class ProcessCollector:
     def _sample_threads(
         self,
         target_pid: int | None,
+        target_start_ticks: int | None,
         cpu_samples: tuple[CpuTimes, ...],
         previous_cpu: tuple[CpuTimes, ...] | None,
     ) -> tuple[ThreadInfo, ...]:
-        """Collect thread counters for only the requested process."""
-        if target_pid != self._previous_thread_target_pid:
+        """Collect thread counters for only the requested process identity."""
+        if (
+            target_pid != self._previous_thread_target_pid
+            or target_start_ticks != self._previous_thread_target_start_ticks
+        ):
             self._previous_threads = {}
             self._previous_thread_target_pid = target_pid
+            self._previous_thread_target_start_ticks = target_start_ticks
         if target_pid is None:
             self._previous_threads = {}
             return ()
