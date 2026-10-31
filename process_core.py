@@ -37,6 +37,21 @@ class ProcessInfo:
 
 
 @dataclass(frozen=True)
+class ThreadInfo:
+    """One kernel thread sampled from /proc/<tgid>/task/<tid>."""
+
+    tid: int
+    tgid: int
+    state: str
+    priority: int
+    nice: int
+    cpu_percent: float
+    cpu_time_s: float
+    command: str
+    start_ticks: int
+
+
+@dataclass(frozen=True)
 class DiskIORate:
     device: str
     read_bytes_s: float | None = None
@@ -60,6 +75,7 @@ class ProcessSnapshot:
     sampled_at: float = 0.0
     disk_io: tuple[DiskIORate, ...] = ()
     network_io: tuple[NetworkIORate, ...] = ()
+    threads: tuple[ThreadInfo, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -249,6 +265,9 @@ class ProcessCollector:
         self._previous_io: dict[int, tuple[int, int, int, float]] = {}
         self._previous_disk: dict[tuple[int, int], tuple[int, int, float]] = {}
         self._previous_network: dict[str, tuple[int, int, float]] = {}
+        self._thread_target_pid: int | None = None
+        self._previous_thread_target_pid: int | None = None
+        self._previous_threads: dict[int, tuple[int, int]] = {}
         self._previous_cpu: tuple[CpuTimes, ...] | None = None
 
     @staticmethod
@@ -276,9 +295,16 @@ class ProcessCollector:
         with self._lock:
             return self._snapshot
 
+    def set_thread_target(self, pid: int | None) -> None:
+        """Collect thread counters for one process, or disable thread sampling."""
+        if pid is not None and (isinstance(pid, bool) or pid <= 0):
+            raise ValueError("thread target PID must be a positive integer")
+        self._thread_target_pid = pid
+
     def collect_once(self) -> ProcessSnapshot:
         """Collect one sample; public to make fixture-based tests deterministic."""
         sample_monotonic = self._monotonic_clock()
+        thread_target_pid = self._thread_target_pid
         cpu_samples = parse_cpu_times((self.proc_root / "stat").read_text())
         mem_total, mem_used = self._read_memory()
         previous_cpu = self._previous_cpu
@@ -385,6 +411,12 @@ class ProcessCollector:
                 continue
         self._previous_process = current_previous
         self._previous_io = current_io
+        threads = (
+            self._sample_threads(thread_target_pid, cpu_samples, previous_cpu)
+            if thread_target_pid is not None
+            and any(process.pid == thread_target_pid for process in processes)
+            else self._sample_threads(None, cpu_samples, previous_cpu)
+        )
         snapshot = ProcessSnapshot(
             processes=tuple(processes),
             cpu_percent=overall_cpu,
@@ -394,10 +426,77 @@ class ProcessCollector:
             sampled_at=time.time(),
             disk_io=disk_io,
             network_io=network_io,
+            threads=threads,
         )
         with self._lock:
             self._snapshot = snapshot
         return snapshot
+
+    def _sample_threads(
+        self,
+        target_pid: int | None,
+        cpu_samples: tuple[CpuTimes, ...],
+        previous_cpu: tuple[CpuTimes, ...] | None,
+    ) -> tuple[ThreadInfo, ...]:
+        """Collect thread counters for only the requested process."""
+        if target_pid != self._previous_thread_target_pid:
+            self._previous_threads = {}
+            self._previous_thread_target_pid = target_pid
+        if target_pid is None:
+            self._previous_threads = {}
+            return ()
+
+        try:
+            task_entries = sorted(
+                (self.proc_root / str(target_pid) / "task").iterdir(),
+                key=lambda entry: int(entry.name) if entry.name.isdigit() else -1,
+            )
+        except OSError:
+            self._previous_threads = {}
+            return ()
+
+        total_delta = (
+            cpu_samples[0].total - previous_cpu[0].total
+            if previous_cpu is not None else 0
+        )
+        threads: list[ThreadInfo] = []
+        current_threads: dict[int, tuple[int, int]] = {}
+        for task in task_entries:
+            if not task.name.isdigit():
+                continue
+            try:
+                raw = parse_proc_stat((task / "stat").read_text())
+                tid = int(raw["pid"])
+                ticks = int(raw["utime"]) + int(raw["stime"])
+                start_ticks = int(raw["start_ticks"])
+                previous = self._previous_threads.get(tid)
+                cpu_pct = 0.0
+                if (
+                    previous is not None
+                    and previous[1] == start_ticks
+                    and total_delta > 0
+                    and ticks >= previous[0]
+                ):
+                    cpu_pct = (
+                        (ticks - previous[0]) / total_delta
+                    ) * max(1, len(cpu_samples) - 1) * 100.0
+                current_threads[tid] = (ticks, start_ticks)
+                threads.append(ThreadInfo(
+                    tid=tid,
+                    tgid=target_pid,
+                    state=str(raw["state"]),
+                    priority=int(raw["priority"]),
+                    nice=int(raw["nice"]),
+                    cpu_percent=max(0.0, cpu_pct),
+                    cpu_time_s=ticks / self.clock_ticks,
+                    command=str(raw["command"]),
+                    start_ticks=start_ticks,
+                ))
+            except (OSError, ValueError, IndexError, KeyError, OverflowError):
+                # Threads can exit or become inaccessible while sampled.
+                continue
+        self._previous_threads = current_threads
+        return tuple(threads)
 
     def _sample_disk_io(self, sampled_at: float) -> tuple[DiskIORate, ...]:
         """Calculate per-device disk throughput from /proc/diskstats."""

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from process_core import DiskIORate, NetworkIORate, ProcessInfo, ProcessSnapshot
+from process_core import DiskIORate, NetworkIORate, ProcessInfo, ProcessSnapshot, ThreadInfo
 from process_monitor import ProcessMonitorUI
 
 
@@ -195,3 +195,49 @@ def test_renderer_shows_unavailable_system_io_sources(
     rendered = "\n".join(line for _y, _x, line, _n in screen.lines)
     assert "No disk device counters available" in rendered
     assert "No network interface counters available" in rendered
+
+def test_renderer_displays_selected_process_thread_cpu_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui._stdscr = FakeScreen(height=18, width=100)
+    snapshot = ProcessSnapshot(
+        processes=(ProcessInfo(
+            321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+            0.0, 0.0, 3.0, "python worker.py", 10,
+        ),),
+        threads=(
+            ThreadInfo(321, 321, "S", 20, 0, 12.5, 2.0, "python", 10),
+            ThreadInfo(322, 321, "R", 20, 0, 55.0, 4.0, "worker", 20),
+        ),
+    )
+
+    ui.renderer.draw(ui, snapshot)
+
+    rendered = "\n".join(line for _y, _x, line, _n in ui._stdscr.lines)
+    assert "THREADS OF PID 321" in rendered
+    assert "python worker.py" in rendered
+    assert "322" in rendered
+    assert "55.0" in rendered
+    assert "worker" in rendered
+    assert "2 threads for PID 321" in rendered
+    assert "F4/Esc Process table" in rendered
+
+
+def test_renderer_handles_exited_thread_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 999
+    ui._stdscr = FakeScreen(height=18, width=100)
+
+    ui.renderer.draw(ui, ProcessSnapshot())
+
+    rendered = "\n".join(line for _y, _x, line, _n in ui._stdscr.lines)
+    assert "THREADS OF PID 999" in rendered
+    assert "No readable threads for this process yet." in rendered
