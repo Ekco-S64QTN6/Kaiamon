@@ -275,3 +275,32 @@ def test_thread_renderer_keeps_selected_tid_highlight_when_cpu_order_changes(
         if item[0] == 4 and item[3] > 0
     )
     assert "selected-worker" in selected_line[2]
+
+def test_thread_renderer_detects_same_tid_with_new_start_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = 10
+    ui.thread_selected = 0
+    ui.thread_selected_tid = 323
+    ui.thread_selected_start_ticks = 300
+    ui._stdscr = FakeScreen(height=18, width=100)
+    snapshot = ProcessSnapshot(
+        processes=(ProcessInfo(
+            321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+            0.0, 0.0, 3.0, "python worker.py", 10,
+        ),),
+        threads=(
+            ThreadInfo(323, 321, "S", 20, 0, 95.0, 2.0, "reused-tid", 301),
+        ),
+    )
+
+    ui.renderer.draw(ui, snapshot)
+
+    assert ui.thread_selected_tid == 323
+    assert ui.thread_selected_start_ticks == 301
+    assert ui.thread_selection_lost is True
+    assert "TID was reused" in ui.status

@@ -122,3 +122,25 @@ def test_renice_thread_rejects_malformed_identity_files_before_syscalls(
 
     with pytest.raises(ValueError):
         renice_thread(321, 322, 100, 200, 0, proc_root=tmp_path)
+
+def test_renice_thread_reads_owner_identity_after_thread_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _thread_fixture(tmp_path)
+    original_read_text = Path.read_text
+    reads: list[str] = []
+
+    def record_reads(path: Path, *args: object, **kwargs: object) -> str:
+        reads.append(str(path))
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr("process_actions.os.getpid", lambda: 999)
+    monkeypatch.setattr(Path, "read_text", record_reads)
+    monkeypatch.setattr("process_actions.os.setpriority", lambda *_args: None)
+    monkeypatch.setattr("process_actions.os.getpriority", lambda *_args: 4)
+
+    assert renice_thread(321, 322, 100, 200, 4, proc_root=tmp_path) == 4
+    assert reads == [
+        str(tmp_path / "321" / "task" / "322" / "stat"),
+        str(tmp_path / "321" / "stat"),
+    ]

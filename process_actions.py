@@ -117,10 +117,12 @@ def renice_thread(
 
     root = Path(proc_root)
     try:
-        process_stat = parse_proc_stat((root / str(tgid) / "stat").read_text())
+        # Read the thread first and the owning process last, minimizing the
+        # interval between the final owner-identity check and setpriority.
         thread_stat = parse_proc_stat(
             (root / str(tgid) / "task" / str(tid) / "stat").read_text()
         )
+        process_stat = parse_proc_stat((root / str(tgid) / "stat").read_text())
     except OSError as exc:
         raise OSError(f"cannot verify TID {tid} in process {tgid}: {exc}") from exc
 
