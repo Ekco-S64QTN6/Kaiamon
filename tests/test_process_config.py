@@ -123,7 +123,7 @@ def test_column_width_normalization_fills_defaults_and_accepts_aliases() -> None
 
 
 @pytest.mark.parametrize("field", ["IO_READ", "IO_WRITE", "START", "ELAPSED", "CGROUP"])
-def test_config_accepts_io_sort_fields(
+def test_config_accepts_supported_sort_fields(
     tmp_path: Path, field: str,
 ) -> None:
     path = tmp_path / "io-sort.json"
