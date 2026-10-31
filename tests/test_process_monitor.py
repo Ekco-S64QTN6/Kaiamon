@@ -82,6 +82,16 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
         (proc / "statm").write_text("1000 100 20 0 0 0 0\n")
         (proc / "cmdline").write_bytes(b"python\0worker.py\0")
         (proc / "io").write_text("rchar: 5000\nwchar: 3000\nsyscr: 4\nsyscw: 2\nread_bytes: 4096\nwrite_bytes: 2048\n")
+        main_task = proc / "task" / "123"
+        main_task.mkdir(parents=True)
+        (main_task / "stat").write_text(
+            _stat_line(123, "python", utime=10, stime=5, start=100)
+        )
+        worker_task = proc / "task" / "456"
+        worker_task.mkdir()
+        (worker_task / "stat").write_text(
+            _stat_line(456, "worker-thread", utime=2, stime=1, start=200)
+        )
 
 
 def _proc(
@@ -349,6 +359,78 @@ def test_missing_system_io_files_do_not_break_process_collection(
     assert [process.pid for process in snapshot.processes] == [123]
     assert snapshot.disk_io == ()
     assert snapshot.network_io == ()
+
+
+
+def test_selected_process_thread_sampling_tracks_cpu_and_pid_reuse(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    assert collector.collect_once().threads == ()
+    collector.set_thread_target(123)
+    first = collector.collect_once()
+    assert {thread.tid for thread in first.threads} == {123, 456}
+    assert all(thread.cpu_percent == 0.0 for thread in first.threads)
+
+    (tmp_path / "stat").write_text(
+        "cpu 200 0 50 1750 0 0 0 0\n"
+        "cpu0 100 0 25 875 0 0 0 0\n"
+        "cpu1 100 0 25 875 0 0 0 0\n"
+    )
+    (tmp_path / "123" / "task" / "123" / "stat").write_text(
+        _stat_line(123, "python", utime=110, stime=5, start=100)
+    )
+    (tmp_path / "123" / "task" / "456" / "stat").write_text(
+        _stat_line(456, "worker-thread", utime=12, stime=1, start=200)
+    )
+    second = collector.collect_once()
+    threads = {thread.tid: thread for thread in second.threads}
+    assert threads[123].cpu_percent == pytest.approx(20.0)
+    assert threads[456].cpu_percent == pytest.approx(2.0)
+    assert threads[456].tgid == 123
+    assert threads[456].cpu_time_s == pytest.approx(0.13)
+
+    # Reusing a TID with a new start time must discard its previous CPU baseline.
+    (tmp_path / "stat").write_text(
+        "cpu 300 0 50 2650 0 0 0 0\n"
+        "cpu0 150 0 25 1325 0 0 0 0\n"
+        "cpu1 150 0 25 1325 0 0 0 0\n"
+    )
+    (tmp_path / "123" / "task" / "456" / "stat").write_text(
+        _stat_line(456, "replacement-thread", utime=1000, stime=100, start=300)
+    )
+    third = collector.collect_once()
+    threads = {thread.tid: thread for thread in third.threads}
+    assert threads[456].cpu_percent == 0.0
+    assert threads[456].command == "replacement-thread"
+
+
+def test_thread_sampling_is_targeted_and_can_be_disabled(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+    collector.set_thread_target(123)
+
+    assert {thread.tid for thread in collector.collect_once().threads} == {123, 456}
+
+    collector.set_thread_target(None)
+    assert collector.collect_once().threads == ()
+
+
+@pytest.mark.parametrize("invalid_pid", [0, -1, True])
+def test_thread_target_rejects_invalid_pid(invalid_pid: int) -> None:
+    collector = ProcessCollector()
+    with pytest.raises(ValueError, match="positive integer"):
+        collector.set_thread_target(invalid_pid)
 
 
 def test_collector_skips_process_that_disappears_during_sample(
