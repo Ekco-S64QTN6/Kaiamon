@@ -142,7 +142,7 @@ class ProcessRenderer:
         ui._put(footer_y, 0, ui.status[:width], curses.color_pair(2))
         ui._put(
             height - 1, 0,
-            f"{len(rows)} processes  |  q Quit  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns"[:width],
+            f"{len(rows)} processes  |  F2 Setup  q Quit  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns"[:width],
             curses.A_DIM,
         )
         screen.refresh()
