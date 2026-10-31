@@ -181,7 +181,10 @@ def test_renderer_draws_system_io_panel_with_device_and_interface_rates(
     assert "F3/Esc Process table" in rendered
 
 
-def test_renderer_shows_unavailable_system_io_sources() -> None:
+def test_renderer_shows_unavailable_system_io_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
     ui = ProcessMonitorUI()
     ui.system_io_mode = True
     screen = FakeScreen(height=18, width=100)
