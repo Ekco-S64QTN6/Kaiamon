@@ -1,7 +1,7 @@
 """Validated Linux process-control operations, independent of curses.
 
 The curses UI is responsible for prompting and confirmation. This module owns
-PID/nice/signal validation and the corresponding operating-system calls.
+PID/nice/signal/affinity validation and the corresponding operating-system calls.
 """
 from __future__ import annotations
 
@@ -72,7 +72,10 @@ def set_process_affinity(pid: int, cpus: Iterable[int]) -> frozenset[int]:
     validate_process_target(pid)
     if isinstance(cpus, (str, bytes)):
         raise ValueError("CPU affinity must be an iterable of CPU IDs")
-    requested = set(cpus)
+    try:
+        requested = set(cpus)
+    except TypeError as exc:
+        raise ValueError("CPU affinity must be an iterable of CPU IDs") from exc
     if not requested:
         raise ValueError("at least one CPU must remain enabled")
     if any(
