@@ -289,7 +289,7 @@ class ProcessMonitorUI:
         while value >= 1024.0 and unit_index < len(units) - 1:
             value /= 1024.0
             unit_index += 1
-        if unit_index == 0:
+        if unit_index == 0 or value >= 100.0:
             return f"{value:.0f}{units[unit_index]}"
         return f"{value:.1f}{units[unit_index]}"
 
