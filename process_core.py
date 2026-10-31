@@ -532,6 +532,24 @@ class ProcessCollector:
             except (OSError, ValueError, IndexError, KeyError, OverflowError):
                 # Threads can exit or become inaccessible while sampled.
                 continue
+
+        # The process may exit and its PID may be reused while task entries are
+        # being read. Discard the entire thread sample if the owner identity changed.
+        if target_start_ticks is not None:
+            try:
+                current_process = parse_proc_stat(
+                    (self.proc_root / str(target_pid) / "stat").read_text()
+                )
+            except (OSError, ValueError, IndexError, KeyError, OverflowError):
+                self._previous_threads = {}
+                return ()
+            if (
+                current_process["pid"] != target_pid
+                or current_process["start_ticks"] != target_start_ticks
+            ):
+                self._previous_threads = {}
+                return ()
+
         self._previous_threads = current_threads
         return tuple(threads)
 
