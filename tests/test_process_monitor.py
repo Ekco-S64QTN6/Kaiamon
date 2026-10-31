@@ -320,8 +320,6 @@ def test_start_and_elapsed_time_formatters_handle_today_old_and_missing() -> Non
 
 
 
-@pytest.mark.parametrize("boot_line", [None, "btime invalid\n"])
-
 def test_missing_process_cgroup_file_does_not_hide_process(tmp_path: Path) -> None:
     _fixture(tmp_path)
     (tmp_path / "123" / "cgroup").unlink()
@@ -336,6 +334,7 @@ def test_missing_process_cgroup_file_does_not_hide_process(tmp_path: Path) -> No
     assert snapshot.processes[0].cgroup is None
 
 
+@pytest.mark.parametrize("boot_line", [None, "btime invalid\n"])
 def test_collector_keeps_process_visible_when_boot_time_unavailable(
     tmp_path: Path, boot_line: str | None,
 ) -> None:
