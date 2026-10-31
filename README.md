@@ -93,14 +93,14 @@ The version 1 configuration format is:
   "version": 1,
   "refresh_interval": 1.0,
   "columns": ["PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE", "CPU", "MEM", "TIME", "COMMAND"],
-  "column_widths": {"PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7, "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24},
+  "column_widths": {"PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7, "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24, "IO_READ": 8, "IO_WRITE": 8},
   "sort_field": "CPU",
   "descending": true,
   "tree_mode": false
 }
 ```
 
-Accepted sort fields are `CPU`, `MEM`, `PID`, `USER`, `TIME`, and `COMMAND`. Column names and aliases are the same as the `--columns` option. `column_widths` is a per-column character width map; omitted entries use defaults, and accepted widths range from 1 to 120. Existing version-1 files without this key remain valid and receive default widths. Config writes use an atomic replacement and a private 0600 file, so an interrupted save does not leave a partially-written preferences file.
+Accepted sort fields are `CPU`, `MEM`, `PID`, `USER`, `TIME`, `COMMAND`, `IO_READ`, and `IO_WRITE` (also displayed as `IOR/s` and `IOW/s`). Column names and aliases are the same as the `--columns` option. `column_widths` is a per-column character width map; omitted entries use defaults, and accepted widths range from 1 to 120. Existing version-1 files without this key remain valid and receive default widths. Config writes use an atomic replacement and a private 0600 file, so an interrupted save does not leave a partially-written preferences file.
 
 ## Architecture
 
@@ -139,7 +139,7 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 ## Comparison with htop
 
-**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
+**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
 **Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its sampling interval is configured at launch; visible columns can be changed at runtime with F2 or at launch. Filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
