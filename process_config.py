@@ -5,6 +5,7 @@ import json
 import math
 import os
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,13 @@ DEFAULT_COLUMNS = (
     "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
     "CPU", "MEM", "TIME", "COMMAND",
 )
+DEFAULT_COLUMN_WIDTHS = (
+    ("PID", 6), ("USER", 8), ("PRI", 3), ("NI", 3),
+    ("VIRT", 7), ("RES", 7), ("SHR", 6), ("STATE", 1),
+    ("CPU", 6), ("MEM", 5), ("TIME", 8), ("COMMAND", 24),
+)
+MIN_COLUMN_WIDTH = 1
+MAX_COLUMN_WIDTH = 120
 SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
 COLUMN_ALIASES = {
     "CPU%": "CPU", "MEM%": "MEM", "TIME+": "TIME", "S": "STATE",
@@ -40,6 +48,7 @@ class MonitorConfig:
     sort_field: str = "CPU"
     descending: bool = True
     tree_mode: bool = False
+    column_widths: tuple[tuple[str, int], ...] = DEFAULT_COLUMN_WIDTHS
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +58,7 @@ class MonitorConfig:
             "sort_field": self.sort_field,
             "descending": self.descending,
             "tree_mode": self.tree_mode,
+            "column_widths": dict(self.column_widths),
         }
 
 
@@ -74,6 +84,33 @@ def normalize_columns(value: object) -> tuple[str, ...]:
     if len(set(columns)) != len(columns):
         raise ValueError("columns cannot contain duplicates")
     return columns
+
+
+def normalize_column_widths(value: object) -> tuple[tuple[str, int], ...]:
+    """Validate a partial column-width map and fill all unspecified defaults."""
+    if not isinstance(value, Mapping):
+        raise ValueError("column_widths must be a JSON object")
+    widths = dict(DEFAULT_COLUMN_WIDTHS)
+    supplied: set[str] = set()
+    for raw_column, width in value.items():
+        if not isinstance(raw_column, str) or not raw_column.strip():
+            raise ValueError("column_widths keys must be non-empty column names")
+        label = raw_column.strip().upper()
+        column = COLUMN_ALIASES.get(label, label)
+        if column not in SUPPORTED_COLUMNS:
+            raise ValueError(f"unsupported column width: {raw_column}")
+        if column in supplied:
+            raise ValueError(f"duplicate column width: {column}")
+        if isinstance(width, bool) or not isinstance(width, int):
+            raise ValueError(f"width for {column} must be an integer")
+        if not MIN_COLUMN_WIDTH <= width <= MAX_COLUMN_WIDTH:
+            raise ValueError(
+                f"width for {column} must be between "
+                f"{MIN_COLUMN_WIDTH} and {MAX_COLUMN_WIDTH}"
+            )
+        widths[column] = width
+        supplied.add(column)
+    return tuple((column, widths[column]) for column, _ in DEFAULT_COLUMN_WIDTHS)
 
 
 def default_config_path() -> Path:
@@ -110,6 +147,12 @@ def _validated_config(data: object) -> MonitorConfig:
     except ValueError as exc:
         raise ConfigError(str(exc)) from exc
 
+    raw_widths = data.get("column_widths", dict(DEFAULT_COLUMN_WIDTHS))
+    try:
+        column_widths = normalize_column_widths(raw_widths)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
+
     sort_field = data.get("sort_field", "CPU")
     if not isinstance(sort_field, str) or sort_field.upper() not in SORT_FIELDS:
         raise ConfigError("'sort_field' must be one of: " + ", ".join(SORT_FIELDS))
@@ -128,6 +171,7 @@ def _validated_config(data: object) -> MonitorConfig:
         sort_field=sort_field,
         descending=descending,
         tree_mode=tree_mode,
+        column_widths=column_widths,
     )
 
 
