@@ -498,6 +498,42 @@ def test_f3_opens_scrollable_system_io_panel_and_returns_to_process_table() -> N
     assert ui.status == "Process table"
 
 
+
+def test_f4_opens_selected_process_threads_and_disables_sampling_on_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    process = _proc(321, 1, "tester", "python worker")
+    snapshot = ProcessSnapshot(processes=(process,))
+    monkeypatch.setattr(ui.collector, "get_snapshot", lambda: snapshot)
+
+    ui._handle_key(curses.KEY_F4)
+    assert ui.thread_panel_mode is True
+    assert ui.thread_target_pid == 321
+    assert ui.collector._thread_target_pid == 321
+    assert "PID 321" in ui.status
+
+    ui._handle_key(curses.KEY_DOWN)
+    assert ui.thread_panel_scroll == 1
+    ui._handle_key(curses.KEY_NPAGE)
+    assert ui.thread_panel_scroll == 11
+
+    ui._handle_key(27)
+    assert ui.thread_panel_mode is False
+    assert ui.thread_target_pid is None
+    assert ui.collector._thread_target_pid is None
+    assert ui.status == "Process table"
+
+
+def test_f4_requires_a_selected_process() -> None:
+    ui = ProcessMonitorUI()
+
+    ui._handle_key(curses.KEY_F4)
+
+    assert ui.thread_panel_mode is False
+    assert ui.status == "Select a process before opening its threads"
+
+
 def test_tree_view_preserves_parent_child_order_and_orphans() -> None:
     rows = (
         _proc(1, 0, "root", "init"),
