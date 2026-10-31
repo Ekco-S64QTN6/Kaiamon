@@ -69,22 +69,13 @@ class ProcessInput:
 
     def handle_key(self, ui: Any, key: int) -> None:
         if ui.thread_panel_mode:
-            thread_rows = sorted(
-                ui.collector.get_snapshot().threads,
-                key=lambda thread: (thread.cpu_percent, thread.tid),
-                reverse=True,
-            )
-            if thread_rows:
-                ui.thread_selected = min(
-                    max(0, ui.thread_selected), len(thread_rows) - 1,
-                )
-            else:
-                ui.thread_selected = 0
+            thread_rows = ui._thread_rows(ui.collector.get_snapshot())
 
             if key in (curses.KEY_F4, 27):
                 ui.thread_panel_mode = False
                 ui.thread_target_pid = None
                 ui.thread_target_start_ticks = None
+                ui.thread_selected_tid = None
                 ui.collector.set_thread_target(None)
                 ui.status = "Process table"
             elif key in (curses.KEY_UP, ord("k")):
@@ -131,6 +122,8 @@ class ProcessInput:
                     ui.status = f"Reniced TID {thread.tid} to {actual_nice}"
                 except (ValueError, OSError, PermissionError) as exc:
                     ui.status = f"Thread renice failed: {exc}"
+            if thread_rows and key not in (ord("r"), ord("R")):
+                ui.thread_selected_tid = thread_rows[ui.thread_selected].tid
             return
 
         if ui.system_io_mode:
