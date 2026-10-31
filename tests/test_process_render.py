@@ -297,7 +297,9 @@ def test_renderer_displays_process_start_and_elapsed_columns(
     row = next(line for y, _x, line, _n in screen.lines if y == 4)
     assert "START" in header
     assert "ELAPSED" in header
-    assert "00:16" in row
+    from datetime import datetime
+
+    assert datetime.fromtimestamp(1000.0).strftime("%H:%M") in row
     assert "01:02:03" in row
 
 
