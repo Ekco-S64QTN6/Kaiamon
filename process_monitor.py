@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import curses
+from datetime import datetime
 import math
 import signal
 import sys
@@ -98,9 +99,26 @@ def sort_processes(
         "COMMAND": lambda p: p.command.casefold(),
         "IO_READ": lambda p: p.io_read_rate or 0.0,
         "IO_WRITE": lambda p: p.io_write_rate or 0.0,
+        "START": lambda p: p.start_time_s or 0.0,
+        "ELAPSED": lambda p: -(p.start_time_s or 0.0),
     }
     if field not in getters:
         raise ValueError(f"unsupported sort field: {field}")
+    if field in {"START", "ELAPSED"}:
+        # Materialize once because callers may supply a one-shot process iterator.
+        rows = tuple(processes)
+        # Processes without a readable boot-time epoch stay last in either direction.
+        known = sorted(
+            (process for process in rows if process.start_time_s is not None),
+            key=lambda process: (getters[field](process), process.pid),
+            reverse=descending,
+        )
+        unknown = sorted(
+            (process for process in rows if process.start_time_s is None),
+            key=lambda process: process.pid,
+            reverse=descending,
+        )
+        return tuple(known + unknown)
     return tuple(sorted(
         processes, key=lambda p: (getters[field](p), p.pid),
         reverse=descending,
@@ -332,6 +350,36 @@ class ProcessMonitorUI:
         hours, remainder = divmod(int(seconds), 3600)
         minutes, secs = divmod(remainder, 60)
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+
+    @staticmethod
+    def _fmt_start_time(start_time_s: float | None, sampled_at: float) -> str:
+        """Show today's process start as HH:MM, otherwise as abbreviated month/day."""
+        if start_time_s is None:
+            return "—"
+        try:
+            started = datetime.fromtimestamp(start_time_s)
+            current = datetime.fromtimestamp(sampled_at)
+        except (OverflowError, OSError, ValueError):
+            return "—"
+        return started.strftime("%H:%M" if started.date() == current.date() else "%b%d")
+
+    @staticmethod
+    def _fmt_elapsed(start_time_s: float | None, sampled_at: float) -> str:
+        """Format non-negative process age compactly for the process table."""
+        if start_time_s is None:
+            return "—"
+        try:
+            elapsed = max(0, int(sampled_at - start_time_s))
+        except (OverflowError, ValueError):
+            return "—"
+        days, remainder = divmod(elapsed, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if days:
+            return f"{days}d{hours:02d}:{minutes:02d}"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     @staticmethod
     def _fmt_rate(bytes_per_second: float | None) -> str:
