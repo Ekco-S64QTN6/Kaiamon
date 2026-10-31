@@ -68,6 +68,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `F1` | Show the keybinding summary in the status line |
 | `F2` | Open column setup; Space toggles visibility, Left/Right reorders, `-` / `+` resize the selected column, Enter applies, and Esc cancels |
 | `F3` | Open the system I/O panel; view per-device disk and per-interface network rates, use Up/Down or Page Up/Down to scroll, and F3/Esc to return |
+| `F4` | Inspect threads for the selected process; view TID, CPU%, CPU time, state, priority, nice value, and thread name. Up/Down or Page Up/Down scroll; F4/Esc returns |
 | `q` | Quit |
 
 Process actions follow normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
@@ -126,7 +127,7 @@ main-thread lifecycle    snapshot renderer        keys + prompts          valida
 state + delegation      curses only              main-thread curses     signal and renice
 ```
 
-- `process_core.py` owns immutable process models, typed `/proc` parsers, CPU, per-process I/O, and system device/network delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
+- `process_core.py` owns immutable process and thread models, typed `/proc` parsers, CPU and I/O delta calculations, and the polling collector. Thread counters are sampled only for the process requested by the F4 inspector, limiting overhead. It has no curses dependency and is tested with synthetic procfs fixtures.
 - `process_config.py` owns versioned preference validation, XDG config-path resolution, and atomic JSON persistence. It does not import curses or depend on the UI.
 - `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
@@ -140,11 +141,11 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 ## Comparison with htop
 
-**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
+**Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields plus per-process I/O rates; on-demand per-process thread inspection with per-thread CPU percentages and time; configurable visible columns, ordering, and widths; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND/I/O sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
 **Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its sampling interval is configured at launch; visible columns can be changed at runtime with F2 or at launch. Filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
-**Not yet implemented:** full htop setup/configuration parity, process/thread toggles, CPU affinity, system-wide disk/network meters, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
+**Not yet implemented:** full htop setup/configuration parity, per-thread process-control actions, CPU affinity, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
 
 ## Testing
 
@@ -155,7 +156,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, column-width validation and setup interactions, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
+The tests cover procfs parsing, delta CPU calculations, process-disappearance races, immutable snapshot publication, atomic configuration persistence and CLI precedence, column-width validation and setup interactions, input navigation/prompts, renderer boundaries, sorting/filtering/tree behavior, selected-process thread sampling and rendering, action validation, and Linux PTY terminal restoration after quit, Ctrl-C/SIGINT, SIGTERM, startup failure, resize, and UI/action-prompt exceptions.
 
 Optional local static checks:
 
