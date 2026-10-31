@@ -1,7 +1,7 @@
 """Validated Linux process-control operations, independent of curses.
 
 The curses UI is responsible for prompting and confirmation. This module owns
-PID/nice/signal/affinity validation and the corresponding operating-system calls.
+PID/nice/signal/affinity validation, start-time-verified thread renicing, and the corresponding operating-system calls.
 """
 from __future__ import annotations
 
