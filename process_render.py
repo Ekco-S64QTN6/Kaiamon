@@ -13,9 +13,10 @@ COLUMN_LABELS = {
     "VIRT": "VIRT", "RES": "RES", "SHR": "SHR", "STATE": "S",
     "CPU": "CPU%", "MEM": "MEM%", "TIME": "TIME+", "COMMAND": "COMMAND",
     "IO_READ": "IOR/s", "IO_WRITE": "IOW/s",
+    "START": "START", "ELAPSED": "ELAPSED",
 }
 COLUMN_WIDTHS = dict(DEFAULT_COLUMN_WIDTHS)
-RIGHT_ALIGNED_COLUMNS = frozenset({"PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME"})
+RIGHT_ALIGNED_COLUMNS = frozenset({"PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME", "START", "ELAPSED"})
 
 
 class ProcessRenderer:
@@ -129,6 +130,8 @@ class ProcessRenderer:
                 "COMMAND": proc.command.replace("\n", " "),
                 "IO_READ": ui._fmt_rate(proc.io_read_rate),
                 "IO_WRITE": ui._fmt_rate(proc.io_write_rate),
+                "START": ui._fmt_start_time(proc.start_time_s, snapshot.sampled_at),
+                "ELAPSED": ui._fmt_elapsed(proc.start_time_s, snapshot.sampled_at),
             }
             indent = ""
             if ui.tree_mode:
