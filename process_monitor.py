@@ -105,14 +105,16 @@ def sort_processes(
     if field not in getters:
         raise ValueError(f"unsupported sort field: {field}")
     if field in {"START", "ELAPSED"}:
+        # Materialize once because callers may supply a one-shot process iterator.
+        rows = tuple(processes)
         # Processes without a readable boot-time epoch stay last in either direction.
         known = sorted(
-            (process for process in processes if process.start_time_s is not None),
+            (process for process in rows if process.start_time_s is not None),
             key=lambda process: (getters[field](process), process.pid),
             reverse=descending,
         )
         unknown = sorted(
-            (process for process in processes if process.start_time_s is None),
+            (process for process in rows if process.start_time_s is None),
             key=lambda process: process.pid,
             reverse=descending,
         )
