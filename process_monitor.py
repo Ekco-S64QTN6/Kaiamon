@@ -188,7 +188,7 @@ class ProcessMonitorUI:
         self.filter_query = ""
         self.collapsed: set[int] = set()
         self.status = (
-            "F1 Help  F2 Setup  F3 System I/O  F4 Threads  F5 Tree  F6 Sort  / Filter  K Signal  r Renice  q Quit"
+            "F1 Help  F2 Setup  F3 System I/O  F4 Threads  F5 Tree  F6 Sort  F8 Affinity  / Filter  K Signal  r Renice  q Quit"
         )
         self._stdscr: Any = None
         self._running = False

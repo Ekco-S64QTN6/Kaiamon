@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Safe process CPU-affinity editor
+
+- Add F8 editor for a selected process's allowed CPU mask, with scrolling for large CPU sets and Space to toggle CPUs.
+- Require a default-no confirmation before applying; never allow an empty mask, and report the effective mask returned by the kernel/cpuset.
+- Reuse process-action PID validation to protect PID 1 and the monitor itself, and compare process start-time ticks immediately before applying to guard PID reuse.
+- Add CPU-affinity operation and editor tests for valid/invalid masks, self/system PID rejection, cancellation, stale PID detection, and UI routing.
+
+
 ## Unreleased — Selected-process thread inspector
 
 - Add F4 view for per-thread TID, CPU percentage, cumulative CPU time, state, priority, nice value, and thread name.

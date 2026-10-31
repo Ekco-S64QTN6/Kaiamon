@@ -517,6 +517,40 @@ def test_f3_opens_scrollable_system_io_panel_and_returns_to_process_table() -> N
 
 
 
+
+def test_f8_opens_affinity_editor_for_selected_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    process = _proc(321, 1, "tester", "python worker")
+    observed: list[tuple[int, int]] = []
+
+    monkeypatch.setattr(ui, "_selected_process", lambda: process)
+    monkeypatch.setattr(
+        "process_input.ProcessAffinityEditor.edit",
+        lambda _editor, _ui, selected: observed.append((selected.pid, selected.start_ticks)),
+    )
+
+    ui._handle_key(curses.KEY_F8)
+
+    assert observed == [(321, process.start_ticks)]
+
+
+def test_f8_affinity_requires_a_selected_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    monkeypatch.setattr(ui, "_selected_process", lambda: None)
+    monkeypatch.setattr(
+        "process_input.ProcessAffinityEditor.edit",
+        lambda *_args: pytest.fail("affinity editor opened without a process"),
+    )
+
+    ui._handle_key(curses.KEY_F8)
+
+    assert ui.status == "Select a process before editing CPU affinity"
+
+
 def test_f4_opens_selected_process_threads_and_disables_sampling_on_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

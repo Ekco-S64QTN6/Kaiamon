@@ -7,7 +7,7 @@ select = ["E4", "E7", "E9", "F"]
 
 [tool.mypy]
 python_version = "3.10"
-files = ["process_core.py", "process_actions.py", "process_config.py", "process_setup.py", "process_render.py", "process_input.py", "process_monitor.py"]
+files = ["process_core.py", "process_actions.py", "process_affinity.py", "process_config.py", "process_setup.py", "process_render.py", "process_input.py", "process_monitor.py"]
 ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true
