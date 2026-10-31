@@ -72,7 +72,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `F8` | Edit the selected process CPU affinity; Space toggles CPUs, Enter asks for confirmation, and Esc cancels. PID 1 and the monitor itself are protected |
 | `q` | Quit |
 
-Process actions follow normal Linux permissions. Kaiamon refuses to signal, renice, or change CPU affinity for PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
+Process actions follow normal Linux permissions. Kaiamon refuses to signal, renice, or change CPU affinity for PID 1 or its own process. Per-thread renice in the F4 inspector also requires a second, default-no confirmation and rechecks both the owning process and thread start-time identities immediately before the syscall, preventing a stale TID from targeting a replacement thread. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
 
 ## Configuration
 
