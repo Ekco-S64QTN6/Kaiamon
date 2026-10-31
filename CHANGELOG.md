@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Safe per-thread renice
+
+- Add `r` in the F4 thread inspector to change the selected thread's nice value, with input validation and default-no confirmation.
+- Verify both the owning process and selected TID using `/proc` start-time ticks immediately before the thread-specific `setpriority` call.
+- Keep thread selection attached to its TID while CPU sorting changes between samples; recover clearly when the selected thread exits.
+- Read and update the collector's thread target PID/start-time pair atomically.
+- Add synthetic coverage for per-thread renice validation, stale/malformed procfs identity, confirmation, selection stability, and renderer highlighting.
+
 ## Unreleased — Safe per-thread renicing
 
 - Add selectable thread rows in F4 and allow `r` to request a nice value for the selected TID.
