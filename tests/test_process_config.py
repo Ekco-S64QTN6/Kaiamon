@@ -245,6 +245,7 @@ def test_cli_loads_saved_preferences_without_overrides(
     assert ui.sort_field == expected.sort_field
     assert ui.descending is expected.descending
     assert ui.tree_mode is expected.tree_mode
+    assert ui.column_widths == dict(expected.column_widths)
 
 
 def test_cli_reports_invalid_config_before_starting_ui(
