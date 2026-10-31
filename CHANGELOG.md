@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Preserve process ancestry in tree filters
+
+- Keep each matching process's available parent chain visible while tree mode is filtered.
+- Exclude unrelated siblings and descendants so filtered results remain focused.
+- Guard traversal against malformed parent cycles and cover both UI behavior and pure filtering logic with synthetic tests.
+
 ## Unreleased — Horizontal process-table scrolling
 
 - Preserve stable fixed widths for every configured column and allow the process table to scroll horizontally with `[` and `]`.
