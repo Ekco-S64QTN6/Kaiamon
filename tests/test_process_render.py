@@ -203,6 +203,7 @@ def test_renderer_displays_selected_process_thread_cpu_rows(
     ui = ProcessMonitorUI()
     ui.thread_panel_mode = True
     ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = 10
     ui._stdscr = FakeScreen(height=18, width=100)
     snapshot = ProcessSnapshot(
         processes=(ProcessInfo(
@@ -225,6 +226,7 @@ def test_renderer_displays_selected_process_thread_cpu_rows(
     assert "worker" in rendered
     assert "2 threads for PID 321" in rendered
     assert "F4/Esc Process table" in rendered
+    assert "r Renice thread" in rendered
 
 
 def test_renderer_handles_exited_thread_target(
