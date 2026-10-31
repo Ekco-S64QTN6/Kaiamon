@@ -410,6 +410,24 @@ def test_selected_process_thread_sampling_tracks_cpu_and_pid_reuse(
     assert threads[456].command == "replacement-thread"
 
 
+
+def test_missing_task_directory_does_not_hide_process(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    (tmp_path / "123" / "task").rename(tmp_path / "123" / "task-disabled")
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+    collector.set_thread_target(123)
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.threads == ()
+
+
 def test_thread_sampling_is_targeted_and_can_be_disabled(
     tmp_path: Path,
 ) -> None:
