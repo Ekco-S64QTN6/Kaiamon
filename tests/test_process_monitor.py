@@ -234,6 +234,11 @@ def test_start_and_elapsed_sorting_use_process_start_epoch() -> None:
 
     assert [process.pid for process in sort_processes(rows, "START")] == [20, 10]
     assert [process.pid for process in sort_processes(rows, "ELAPSED")] == [10, 20]
+    unknown = replace(rows[0], pid=30, start_time_s=None)
+    with_unknown = rows + (unknown,)
+    assert [process.pid for process in sort_processes(with_unknown, "START")] == [20, 10, 30]
+    assert [process.pid for process in sort_processes(with_unknown, "START", False)] == [10, 20, 30]
+    assert [process.pid for process in sort_processes(with_unknown, "ELAPSED")] == [10, 20, 30]
 
 
 def test_start_and_elapsed_time_formatters_handle_today_old_and_missing() -> None:
@@ -254,6 +259,31 @@ def test_start_and_elapsed_time_formatters_handle_today_old_and_missing() -> Non
         "2d03:04"
     )
     assert ProcessMonitorUI._fmt_elapsed(None, now) == "—"
+
+
+
+@pytest.mark.parametrize("boot_line", [None, "btime invalid\n"])
+def test_collector_keeps_process_visible_when_boot_time_unavailable(
+    tmp_path: Path, boot_line: str | None,
+) -> None:
+    _fixture(tmp_path)
+    stat_path = tmp_path / "stat"
+    existing = [
+        line for line in stat_path.read_text().splitlines()
+        if not line.startswith("btime ")
+    ]
+    if boot_line is not None:
+        existing.append(boot_line.strip())
+    stat_path.write_text("\n".join(existing) + "\n")
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.processes[0].start_time_s is None
 
 
 def test_process_cpu_is_delta_based_and_starttime_guards_pid_reuse(
