@@ -163,7 +163,9 @@ class ProcessMonitorUI:
     ) -> None:
         self.refresh_interval = parse_refresh_interval(str(refresh_interval))
         self.columns = parse_columns(",".join(columns))
-        width_values = dict(DEFAULT_COLUMN_WIDTHS) if column_widths is None else column_widths
+        width_values = (
+            dict(DEFAULT_COLUMN_WIDTHS) if column_widths is None else column_widths
+        )
         self.column_widths = dict(normalize_column_widths(width_values))
         self.sort_field = sort_field.upper()
         if self.sort_field not in SORT_FIELDS:
