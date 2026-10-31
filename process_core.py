@@ -157,6 +157,9 @@ def parse_network_dev(contents: str) -> tuple[NetworkCounters, ...]:
         if not interface:
             continue
         values = counters_text.split()
+        if not values or not values[0].isdigit():
+            # Skip the two textual column-header lines.
+            continue
         if len(values) < 9:
             raise ValueError("truncated /proc/net/dev line")
         try:
