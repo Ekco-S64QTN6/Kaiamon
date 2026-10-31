@@ -186,6 +186,7 @@ class ProcessMonitorUI:
         self.thread_panel_scroll = 0
         self.thread_selected = 0
         self.thread_selected_tid: int | None = None
+        self.thread_selection_lost = False
         self.thread_target_pid: int | None = None
         self.thread_target_start_ticks: int | None = None
         self.filter_query = ""
@@ -261,6 +262,7 @@ class ProcessMonitorUI:
             key=lambda thread: (thread.cpu_percent, thread.tid),
             reverse=True,
         ))
+        self.thread_selection_lost = False
         if not rows:
             self.thread_selected = 0
             self.thread_selected_tid = None
@@ -284,6 +286,7 @@ class ProcessMonitorUI:
             )
             new_tid = rows[self.thread_selected].tid
             if self.thread_selected_tid is not None:
+                self.thread_selection_lost = True
                 self.status = (
                     f"Selected thread exited; now selecting TID {new_tid}"
                 )
