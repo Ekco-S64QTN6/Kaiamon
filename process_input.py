@@ -70,12 +70,18 @@ class ProcessInput:
     def handle_key(self, ui: Any, key: int) -> None:
         if ui.thread_panel_mode:
             thread_rows = ui._thread_rows(ui.collector.get_snapshot())
+            if key in (ord("r"), ord("R")) and ui.thread_selection_lost:
+                ui.status = (
+                    "Selected thread exited; review the new selection before renicing"
+                )
+                return
 
             if key in (curses.KEY_F4, 27):
                 ui.thread_panel_mode = False
                 ui.thread_target_pid = None
                 ui.thread_target_start_ticks = None
                 ui.thread_selected_tid = None
+                ui.thread_selection_lost = False
                 ui.collector.set_thread_target(None)
                 ui.status = "Process table"
             elif key in (curses.KEY_UP, ord("k")):
@@ -176,6 +182,7 @@ class ProcessInput:
                 ui.thread_panel_scroll = 0
                 ui.thread_selected = 0
                 ui.thread_selected_tid = None
+                ui.thread_selection_lost = False
                 ui.thread_target_pid = process.pid
                 ui.thread_target_start_ticks = process.start_ticks
                 ui.collector.set_thread_target(process.pid, process.start_ticks)
