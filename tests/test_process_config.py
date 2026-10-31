@@ -72,6 +72,7 @@ def test_config_file_is_created_with_private_permissions(tmp_path: Path) -> None
         ('{"refresh_interval": NaN}', "finite"),
         ('{"columns": ["PID", "pid"]}', "duplicates"),
         ('{"columns": ["PID", "UNKNOWN"]}', "unsupported column"),
+        ('{"columns": "PID,CPU"}', "JSON array"),
         ('{"sort_field": "NOPE"}', "sort_field"),
         ('{"descending": "yes"}', "descending"),
         ('{"tree_mode": 1}', "tree_mode"),
@@ -245,3 +246,21 @@ def test_failed_atomic_replace_keeps_existing_config_and_cleans_temp_file(
 
     assert load_config(path) == original
     assert list(tmp_path.glob(".config.json.*.tmp")) == []
+
+
+def test_invalid_utf8_config_reports_configuration_error(tmp_path: Path) -> None:
+    path = tmp_path / "invalid-encoding.json"
+    path.write_bytes(b"\\xff\\xfe")
+
+    with pytest.raises(ConfigError, match="could not read"):
+        load_config(path)
+
+
+def test_save_rejects_invalid_runtime_config_before_writing(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    invalid = MonitorConfig(refresh_interval=float("nan"))
+
+    with pytest.raises(ConfigError, match="finite"):
+        save_config(path, invalid)
+
+    assert not path.exists()
