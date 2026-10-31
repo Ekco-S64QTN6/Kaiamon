@@ -175,11 +175,11 @@ class ProcessRenderer:
         lines.append("")
         lines.append("NETWORK INTERFACES  (receive / transmit)")
         if snapshot.network_io:
-            for item in snapshot.network_io:
-                receive_rate = ui._fmt_rate(item.receive_bytes_s)
-                transmit_rate = ui._fmt_rate(item.transmit_bytes_s)
+            for network_item in snapshot.network_io:
+                receive_rate = ui._fmt_rate(network_item.receive_bytes_s)
+                transmit_rate = ui._fmt_rate(network_item.transmit_bytes_s)
                 lines.append(
-                    f"{item.interface[:16]:<16} RX {receive_rate:>8}  TX {transmit_rate:>8}"
+                    f"{network_item.interface[:16]:<16} RX {receive_rate:>8}  TX {transmit_rate:>8}"
                 )
         else:
             lines.append("No network interface counters available")
