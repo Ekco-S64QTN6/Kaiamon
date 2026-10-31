@@ -239,6 +239,24 @@ def test_start_and_elapsed_sorting_use_process_start_epoch() -> None:
     assert [process.pid for process in sort_processes(with_unknown, "START")] == [20, 10, 30]
     assert [process.pid for process in sort_processes(with_unknown, "START", False)] == [10, 20, 30]
     assert [process.pid for process in sort_processes(with_unknown, "ELAPSED")] == [10, 20, 30]
+    assert [process.pid for process in sort_processes(iter(with_unknown), "START")] == [20, 10, 30]
+
+
+
+def test_f6_cycles_through_start_and_elapsed_sort_modes() -> None:
+    ui = ProcessMonitorUI(sort_field="IO_WRITE", descending=False)
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "START"
+    assert ui.descending is True
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "START"
+    assert ui.descending is False
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "ELAPSED"
+    assert ui.descending is True
 
 
 def test_start_and_elapsed_time_formatters_handle_today_old_and_missing() -> None:
