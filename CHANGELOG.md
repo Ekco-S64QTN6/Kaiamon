@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Safe per-thread renicing
+
+- Add selectable thread rows in F4 and allow `r` to request a nice value for the selected TID.
+- Require default-no confirmation and verify both parent PID and thread TID start-time ticks against procfs immediately before `setpriority`.
+- Bind active thread sampling to both the target PID and its original start time so PID reuse cannot silently change the inspected process.
+- Keep thread signalling deferred; add tests for action validation, parent/TID reuse, F4 selection, confirmed/declined renice, and inspector lifecycle.
+
+
 ## Unreleased — Safe process CPU-affinity editor
 
 - Add F8 editor for a selected process's allowed CPU mask, with scrolling for large CPU sets and Space to toggle CPUs.
