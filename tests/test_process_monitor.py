@@ -15,6 +15,7 @@ from process_core import (
     ProcessCollector,
     ProcessInfo,
     ProcessSnapshot,
+    ThreadInfo,
     cpu_usage,
     parse_cpu_times,
     parse_diskstats,
@@ -586,25 +587,93 @@ def test_f4_opens_selected_process_threads_and_disables_sampling_on_exit(
 ) -> None:
     ui = ProcessMonitorUI()
     process = _proc(321, 1, "tester", "python worker")
-    snapshot = ProcessSnapshot(processes=(process,))
+    threads = tuple(
+        ThreadInfo(
+            400 + index, 321, "R", 20, 0, float(index), float(index),
+            f"worker-{index}", 1000 + index,
+        )
+        for index in range(12)
+    )
+    snapshot = ProcessSnapshot(processes=(process,), threads=threads)
     monkeypatch.setattr(ui.collector, "get_snapshot", lambda: snapshot)
 
     ui._handle_key(curses.KEY_F4)
     assert ui.thread_panel_mode is True
     assert ui.thread_target_pid == 321
+    assert ui.thread_target_start_ticks == process.start_ticks
     assert ui.collector._thread_target_pid == 321
+    assert ui.collector._thread_target_start_ticks == process.start_ticks
     assert "PID 321" in ui.status
 
     ui._handle_key(curses.KEY_DOWN)
-    assert ui.thread_panel_scroll == 1
+    assert ui.thread_selected == 1
     ui._handle_key(curses.KEY_NPAGE)
-    assert ui.thread_panel_scroll == 11
+    assert ui.thread_selected == 11
 
     ui._handle_key(27)
     assert ui.thread_panel_mode is False
     assert ui.thread_target_pid is None
+    assert ui.thread_target_start_ticks is None
     assert ui.collector._thread_target_pid is None
     assert ui.status == "Process table"
+
+
+
+def test_thread_panel_r_renices_selected_thread_after_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    process = _proc(321, 1, "tester", "python worker")
+    threads = (
+        ThreadInfo(322, 321, "R", 20, 0, 80.0, 3.0, "busy-worker", 200),
+        ThreadInfo(323, 321, "S", 20, 0, 10.0, 2.0, "idle-worker", 300),
+    )
+    monkeypatch.setattr(
+        ui.collector, "get_snapshot",
+        lambda: ProcessSnapshot(processes=(process,), threads=threads),
+    )
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = process.start_ticks
+    answers = iter(("7", "y"))
+    monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(answers))
+    calls: list[tuple[int, int, int, int, int]] = []
+    monkeypatch.setattr(
+        "process_input.renice_thread",
+        lambda tgid, tid, parent_start, thread_start, nice: (
+            calls.append((tgid, tid, parent_start, thread_start, nice)) or nice
+        ),
+    )
+
+    ui._handle_key(ord("r"))
+
+    assert calls == [(321, 322, process.start_ticks, 200, 7)]
+    assert ui.status == "Reniced TID 322 to 7"
+
+
+def test_thread_panel_thread_renice_declines_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    process = _proc(321, 1, "tester", "python worker")
+    thread = ThreadInfo(322, 321, "R", 20, 0, 80.0, 3.0, "busy-worker", 200)
+    monkeypatch.setattr(
+        ui.collector, "get_snapshot",
+        lambda: ProcessSnapshot(processes=(process,), threads=(thread,)),
+    )
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = process.start_ticks
+    answers = iter(("7", "n"))
+    monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(answers))
+    monkeypatch.setattr(
+        "process_input.renice_thread",
+        lambda *_args: pytest.fail("declined thread renice reached OS action"),
+    )
+
+    ui._handle_key(ord("r"))
+
+    assert ui.status == "Renice cancelled for TID 322"
 
 
 def test_f4_requires_a_selected_process() -> None:
