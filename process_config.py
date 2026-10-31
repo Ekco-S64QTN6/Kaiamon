@@ -55,7 +55,7 @@ class MonitorConfig:
 def normalize_columns(value: object) -> tuple[str, ...]:
     """Validate and normalize a sequence or comma-separated list of columns."""
     if isinstance(value, str):
-        requested: list[object] = value.split(",")
+        requested: list[object] = list(value.split(","))
     elif isinstance(value, (list, tuple)):
         requested = list(value)
     else:
