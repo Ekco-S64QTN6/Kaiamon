@@ -40,7 +40,7 @@ Kaiamon is a Linux htop-style process monitor. The legacy ping, systemd, thermal
 ## Later / explicitly deferred
 
 - Per-thread signalling and remaining per-thread controls.
-- Other scheduler controls such as per-thread process-control actions.
+- Additional per-thread scheduling controls beyond nice values.
 - GPU process monitoring.
 - Cross-platform backends and plugin architecture.
 - Full htop configuration/setup parity beyond the initial editable column layout (for example, configurable meters, colors, and header arrangement).
