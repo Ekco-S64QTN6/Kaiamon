@@ -5,6 +5,7 @@ import curses
 from typing import Any
 
 from process_actions import SIGNAL_CHOICES, renice_process, signal_process
+from process_affinity import ProcessAffinityEditor
 from process_config import SORT_FIELDS
 from process_setup import ProcessSetup
 
@@ -131,6 +132,12 @@ class ProcessInput:
                 ui.thread_target_pid = process.pid
                 ui.collector.set_thread_target(process.pid)
                 ui.status = f"Threads for PID {process.pid} — sampling this process only"
+        elif key == curses.KEY_F8:
+            process = ui._selected_process()
+            if process is None:
+                ui.status = "Select a process before editing CPU affinity"
+            else:
+                ProcessAffinityEditor().edit(ui, process)
         elif key in (curses.KEY_F5, ord("t"), ord("T")):
             ui.tree_mode = not ui.tree_mode
             ui.selected = 0
@@ -196,6 +203,6 @@ class ProcessInput:
             ui.status = "Process table shifted right"
         elif key == curses.KEY_F1:
             ui.status = (
-                "F2 Setup  F3 System I/O  F4 Threads  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
+                "F2 Setup  F3 System I/O  F4 Threads  F8 Affinity  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
                 "←/→ Collapse  Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )
