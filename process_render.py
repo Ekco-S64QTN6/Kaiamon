@@ -5,17 +5,15 @@ from typing import Any
 
 import curses
 
-from process_config import DEFAULT_COLUMN_WIDTHS\nfrom process_core import ProcessSnapshot
+from process_config import DEFAULT_COLUMN_WIDTHS
+from process_core import ProcessSnapshot
 
 COLUMN_LABELS = {
     "PID": "PID", "USER": "USER", "PRI": "PRI", "NI": "NI",
     "VIRT": "VIRT", "RES": "RES", "SHR": "SHR", "STATE": "S",
     "CPU": "CPU%", "MEM": "MEM%", "TIME": "TIME+", "COMMAND": "COMMAND",
 }
-COLUMN_WIDTHS = {
-    "PID": 6, "USER": 8, "PRI": 3, "NI": 3, "VIRT": 7, "RES": 7,
-    "SHR": 6, "STATE": 1, "CPU": 6, "MEM": 5, "TIME": 8, "COMMAND": 24,
-}
+COLUMN_WIDTHS = dict(DEFAULT_COLUMN_WIDTHS)
 RIGHT_ALIGNED_COLUMNS = frozenset({"PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME"})
 
 
@@ -123,7 +121,7 @@ class ProcessRenderer:
                 values[target] = indent + values[target]
             cells = []
             for column in ui.columns:
-                cell_width = COLUMN_WIDTHS[column]
+                cell_width = ui.column_widths[column]
                 alignment = (
                     "<" if column == "COMMAND"
                     else (">" if column in RIGHT_ALIGNED_COLUMNS else "<")
