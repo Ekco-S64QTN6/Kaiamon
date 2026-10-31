@@ -46,7 +46,7 @@ The process table includes:
 | `IOR/s` | Per-process storage read rate from `/proc/<pid>/io` |
 | `IOW/s` | Per-process storage write rate from `/proc/<pid>/io` |
 
-Aggregate CPU and memory meters appear above the table. Up to eight compact per-core CPU meters are shown in the header. Processes that exit or become inaccessible during a sample are skipped.
+Aggregate CPU and memory meters appear above the table. Up to eight compact per-core CPU meters are shown in the header. Processes that exit or become inaccessible during a sample are skipped. Press F3 for the system I/O panel, which shows read/write throughput for each block device from `/proc/diskstats` and receive/transmit throughput for each interface from `/proc/net/dev`. Rates are shown per device/interface rather than summed, avoiding misleading totals when virtual devices, partitions, bridges, or layered block devices overlap.
 
 ## Keyboard controls
 
@@ -67,6 +67,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `r` | Set the selected process nice value (-20 through 19) |
 | `F1` | Show the keybinding summary in the status line |
 | `F2` | Open column setup; Space toggles visibility, Left/Right reorders, `-` / `+` resize the selected column, Enter applies, and Esc cancels |
+| `F3` | Open the system I/O panel; view per-device disk and per-interface network rates, use Up/Down or Page Up/Down to scroll, and F3/Esc to return |
 | `q` | Quit |
 
 Process actions follow normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
@@ -125,7 +126,7 @@ main-thread lifecycle    snapshot renderer        keys + prompts          valida
 state + delegation      curses only              main-thread curses     signal and renice
 ```
 
-- `process_core.py` owns immutable process models, typed `/proc` parsers, CPU and per-process I/O delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
+- `process_core.py` owns immutable process models, typed `/proc` parsers, CPU, per-process I/O, and system device/network delta calculations, and the polling collector. It has no curses dependency and is tested with synthetic procfs fixtures.
 - `process_config.py` owns versioned preference validation, XDG config-path resolution, and atomic JSON persistence. It does not import curses or depend on the UI.
 - `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
