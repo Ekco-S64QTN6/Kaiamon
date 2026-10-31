@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Process cgroup metadata
+
+- Parse `/proc/<pid>/cgroup`, preferring the unified cgroup v2 path and falling back to the deepest available v1 hierarchy path.
+- Add optional `CGROUP` column and sort field; allow `/` filtering to match cgroup paths so service/container workloads can be isolated without external tools.
+- Default the optional column width to 40 characters, expose it in F2 setup, and keep missing or unreadable cgroup metadata non-fatal.
+- Add synthetic parser, collector, filter, sort, configuration, setup, and renderer tests.
+
+
 ## Unreleased — Process start and elapsed time
 
 - Parse `/proc/stat` `btime` and combine it with each process's start ticks and clock-tick frequency to derive a wall-clock start epoch.
