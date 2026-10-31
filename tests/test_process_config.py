@@ -104,8 +104,8 @@ def test_column_normalization_supports_aliases_and_rejects_bad_shapes() -> None:
     assert normalize_columns([" command ", "pid", "CPU%"]) == (
         "COMMAND", "PID", "CPU",
     )
-    assert normalize_columns(["IOR/s", "IOW/s", "STARTTIME", "ETIME"]) == (
-        "IO_READ", "IO_WRITE", "START", "ELAPSED",
+    assert normalize_columns(["IOR/s", "IOW/s", "STARTTIME", "ETIME", "CGROUP_PATH"]) == (
+        "IO_READ", "IO_WRITE", "START", "ELAPSED", "CGROUP",
     )
     with pytest.raises(ValueError, match="non-string"):
         normalize_columns(["PID", 3])
@@ -122,7 +122,7 @@ def test_column_width_normalization_fills_defaults_and_accepts_aliases() -> None
         normalize_column_widths({"CPU": 7, "CPU%": 8})
 
 
-@pytest.mark.parametrize("field", ["IO_READ", "IO_WRITE", "START", "ELAPSED"])
+@pytest.mark.parametrize("field", ["IO_READ", "IO_WRITE", "START", "ELAPSED", "CGROUP"])
 def test_config_accepts_io_sort_fields(
     tmp_path: Path, field: str,
 ) -> None:
@@ -140,6 +140,8 @@ def test_start_and_elapsed_columns_are_available_with_documented_widths() -> Non
     assert "ELAPSED" in AVAILABLE_COLUMNS
     assert widths["START"] == 8
     assert widths["ELAPSED"] == 9
+    assert "CGROUP" in AVAILABLE_COLUMNS
+    assert widths["CGROUP"] == 40
 
 
 def test_legacy_version_one_config_defaults_column_widths(tmp_path: Path) -> None:
