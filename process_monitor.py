@@ -263,7 +263,6 @@ class ProcessMonitorUI:
             key=lambda thread: (thread.cpu_percent, thread.tid),
             reverse=True,
         ))
-        self.thread_selection_lost = False
         if not rows:
             # Preserve the previous identity across an empty sample. If a TID
             # reappears with a new start time, it must be treated as a new thread.
