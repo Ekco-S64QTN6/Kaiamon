@@ -37,7 +37,7 @@ jobs:
         run: python -m pytest -q
 
       - name: Lint the active application and tests
-        run: ruff check kaiamon.py process_core.py process_actions.py process_config.py process_render.py process_input.py process_monitor.py tests
+        run: ruff check kaiamon.py process_core.py process_actions.py process_config.py process_setup.py process_render.py process_input.py process_monitor.py tests
 
       - name: Type-check the process-monitor core
         run: mypy process_core.py process_actions.py process_config.py process_render.py process_input.py process_monitor.py
