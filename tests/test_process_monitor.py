@@ -283,6 +283,74 @@ def test_missing_process_io_file_does_not_hide_process(
     assert snapshot.processes[0].io_write_rate is None
 
 
+
+def test_system_disk_and_network_rates_use_per_device_deltas(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    sample_times = iter((10.0, 12.0, 14.0))
+    collector = ProcessCollector(
+        tmp_path,
+        clock_ticks=100,
+        page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+        monotonic_clock=lambda: next(sample_times),
+    )
+
+    first = collector.collect_once()
+    assert {item.device for item in first.disk_io} == {"sda", "sda1"}
+    assert {item.interface for item in first.network_io} == {"eth0", "lo"}
+    assert all(item.read_bytes_s is None for item in first.disk_io)
+    assert all(item.receive_bytes_s is None for item in first.network_io)
+
+    (tmp_path / "diskstats").write_text(
+        "8 0 sda 10 0 110 1 20 0 220 2 0 0 0 0\n"
+        "8 1 sda1 5 0 60 1 10 0 120 1 0 0 0 0\n"
+    )
+    (tmp_path / "net" / "dev").write_text(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 500 1 0 0 0 0 0 0 1000 1 0 0 0 0 0 0\n"
+        "lo: 70 1 0 0 0 0 0 0 100 1 0 0 0 0 0 0\n"
+    )
+    second = collector.collect_once()
+    disks = {item.device: item for item in second.disk_io}
+    networks = {item.interface: item for item in second.network_io}
+    assert disks["sda"].read_bytes_s == pytest.approx(25_600.0)
+    assert disks["sda"].write_bytes_s == pytest.approx(51_200.0)
+    assert networks["eth0"].receive_bytes_s == pytest.approx(200.0)
+    assert networks["eth0"].transmit_bytes_s == pytest.approx(400.0)
+
+    # Counter resets or device replacement must not create negative throughput.
+    (tmp_path / "diskstats").write_text("8 0 sda 10 0 1 1 20 0 1 2 0 0 0 0\n")
+    (tmp_path / "net" / "dev").write_text(
+        "Inter-| Receive | Transmit\n"
+        " face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
+        "eth0: 1 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0\n"
+    )
+    third = collector.collect_once()
+    assert {item.device: item for item in third.disk_io}["sda"].read_bytes_s == 0.0
+    assert {item.interface: item for item in third.network_io}["eth0"].receive_bytes_s == 0.0
+
+
+def test_missing_system_io_files_do_not_break_process_collection(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    (tmp_path / "diskstats").unlink()
+    (tmp_path / "net" / "dev").unlink()
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.disk_io == ()
+    assert snapshot.network_io == ()
+
+
 def test_collector_skips_process_that_disappears_during_sample(
     tmp_path: Path,
 ) -> None:
