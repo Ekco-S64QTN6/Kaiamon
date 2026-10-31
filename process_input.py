@@ -138,6 +138,7 @@ class ProcessInput:
                 selected_thread = thread_rows[ui.thread_selected]
                 ui.thread_selected_tid = selected_thread.tid
                 ui.thread_selected_start_ticks = selected_thread.start_ticks
+                ui.thread_selection_lost = False
             return
 
         if ui.system_io_mode:
