@@ -17,20 +17,23 @@ DEFAULT_COLUMNS = (
     "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
     "CPU", "MEM", "TIME", "COMMAND",
 )
+AVAILABLE_COLUMNS = DEFAULT_COLUMNS + ("IO_READ", "IO_WRITE")
 DEFAULT_COLUMN_WIDTHS = (
     ("PID", 6), ("USER", 8), ("PRI", 3), ("NI", 3),
     ("VIRT", 7), ("RES", 7), ("SHR", 6), ("STATE", 1),
     ("CPU", 6), ("MEM", 5), ("TIME", 8), ("COMMAND", 24),
+    ("IO_READ", 8), ("IO_WRITE", 8),
 )
 MIN_COLUMN_WIDTH = 1
 MAX_COLUMN_WIDTH = 120
-SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
+SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND", "IO_READ", "IO_WRITE")
 COLUMN_ALIASES = {
     "CPU%": "CPU", "MEM%": "MEM", "TIME+": "TIME", "S": "STATE",
+    "IOR/S": "IO_READ", "IOW/S": "IO_WRITE",
 }
 SUPPORTED_COLUMNS = frozenset({
     "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR",
-    "STATE", "CPU", "MEM", "TIME", "COMMAND",
+    "STATE", "CPU", "MEM", "TIME", "COMMAND", "IO_READ", "IO_WRITE",
 })
 CONFIG_VERSION = 1
 

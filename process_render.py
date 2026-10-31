@@ -12,6 +12,7 @@ COLUMN_LABELS = {
     "PID": "PID", "USER": "USER", "PRI": "PRI", "NI": "NI",
     "VIRT": "VIRT", "RES": "RES", "SHR": "SHR", "STATE": "S",
     "CPU": "CPU%", "MEM": "MEM%", "TIME": "TIME+", "COMMAND": "COMMAND",
+    "IO_READ": "IOR/s", "IO_WRITE": "IOW/s",
 }
 COLUMN_WIDTHS = dict(DEFAULT_COLUMN_WIDTHS)
 RIGHT_ALIGNED_COLUMNS = frozenset({"PID", "PRI", "NI", "VIRT", "RES", "SHR", "CPU", "MEM", "TIME"})
@@ -112,6 +113,8 @@ class ProcessRenderer:
                 "CPU": f"{proc.cpu_percent:.1f}", "MEM": f"{proc.mem_percent:.1f}",
                 "TIME": ui._fmt_time(proc.cpu_time_s),
                 "COMMAND": proc.command.replace("\n", " "),
+                "IO_READ": ui._fmt_rate(proc.io_read_rate),
+                "IO_WRITE": ui._fmt_rate(proc.io_write_rate),
             }
             indent = ""
             if ui.tree_mode:

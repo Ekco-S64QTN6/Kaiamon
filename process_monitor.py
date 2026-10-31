@@ -96,6 +96,8 @@ def sort_processes(
         "USER": lambda p: p.user.casefold(),
         "TIME": lambda p: p.cpu_time_s,
         "COMMAND": lambda p: p.command.casefold(),
+        "IO_READ": lambda p: p.io_read_rate or 0.0,
+        "IO_WRITE": lambda p: p.io_write_rate or 0.0,
     }
     if field not in getters:
         raise ValueError(f"unsupported sort field: {field}")
@@ -276,6 +278,20 @@ class ProcessMonitorUI:
         hours, remainder = divmod(int(seconds), 3600)
         minutes, secs = divmod(remainder, 60)
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+    @staticmethod
+    def _fmt_rate(bytes_per_second: float | None) -> str:
+        if bytes_per_second is None:
+            return "—"
+        value = max(0.0, bytes_per_second)
+        units = ("B/s", "K/s", "M/s", "G/s", "T/s")
+        unit_index = 0
+        while value >= 1024.0 and unit_index < len(units) - 1:
+            value /= 1024.0
+            unit_index += 1
+        if unit_index == 0 or value >= 100.0:
+            return f"{value:.0f}{units[unit_index]}"
+        return f"{value:.1f}{units[unit_index]}"
 
     def _selected_process(self) -> ProcessInfo | None:
         rows = self._visible(self.collector.get_snapshot())

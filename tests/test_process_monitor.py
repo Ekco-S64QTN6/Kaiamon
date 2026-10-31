@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import curses
+from dataclasses import replace
 import os
 import signal
 from pathlib import Path
@@ -16,6 +17,7 @@ from process_core import (
     ProcessSnapshot,
     cpu_usage,
     parse_cpu_times,
+    parse_proc_io,
     parse_proc_stat,
 )
 from process_actions import (
@@ -66,6 +68,7 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
         )
         (proc / "statm").write_text("1000 100 20 0 0 0 0\n")
         (proc / "cmdline").write_bytes(b"python\0worker.py\0")
+        (proc / "io").write_text("rchar: 5000\nwchar: 3000\nsyscr: 4\nsyscw: 2\nread_bytes: 4096\nwrite_bytes: 2048\n")
 
 
 def _proc(
@@ -76,6 +79,25 @@ def _proc(
         pid, ppid, user, 20, 0, 1000, 500, 100, "S", cpu, mem, 12.0,
         command, 10,
     )
+
+
+def test_parse_proc_io_reads_storage_byte_counters() -> None:
+    assert parse_proc_io(
+        "rchar: 5000\nwchar: 3000\nread_bytes: 4096\nwrite_bytes: 2048\n"
+    ) == (4096, 2048)
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "read_bytes: 1\n",
+        "read_bytes: nope\nwrite_bytes: 2\n",
+        "read_bytes: -1\nwrite_bytes: 2\n",
+    ],
+)
+def test_parse_proc_io_rejects_missing_or_invalid_counters(contents: str) -> None:
+    with pytest.raises(ValueError):
+        parse_proc_io(contents)
 
 
 def test_parse_proc_stat_handles_spaces_and_parentheses() -> None:
@@ -121,6 +143,8 @@ def test_process_collector_reads_fixture_and_publishes_nonempty_snapshot(
     assert process.res_kb == 400
     assert process.shr_kb == 80
     assert process.cpu_time_s == pytest.approx(0.15)
+    assert process.io_read_rate is None
+    assert process.io_write_rate is None
     assert first.memory_total_kb == 100000
     assert first.memory_used_kb == 60000
     assert collector.get_snapshot() == first
@@ -151,6 +175,63 @@ def test_process_cpu_is_delta_based_and_starttime_guards_pid_reuse(
     )
     third = collector.collect_once()
     assert third.processes[0].cpu_percent == 0.0
+
+
+def test_process_io_rates_use_deltas_and_guard_pid_reuse(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    sample_times = iter((10.0, 12.0, 14.0, 16.0))
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+        monotonic_clock=lambda: next(sample_times),
+    )
+
+    first = collector.collect_once()
+    assert first.processes[0].io_read_rate is None
+    assert first.processes[0].io_write_rate is None
+
+    proc = tmp_path / "123"
+    (proc / "io").write_text(
+        "rchar: 9000\nwchar: 5000\nread_bytes: 8192\nwrite_bytes: 4096\n"
+    )
+    second = collector.collect_once()
+    assert second.processes[0].io_read_rate == pytest.approx(2048.0)
+    assert second.processes[0].io_write_rate == pytest.approx(1024.0)
+
+    (proc / "stat").write_text(
+        _stat_line(123, "reused worker", utime=1, stime=1, start=999)
+    )
+    (proc / "io").write_text(
+        "read_bytes: 16384\nwrite_bytes: 8192\n"
+    )
+    third = collector.collect_once()
+    assert third.processes[0].io_read_rate is None
+    assert third.processes[0].io_write_rate is None
+
+    # Counter rollback without PID reuse is clamped instead of producing negatives.
+    (proc / "io").write_text("read_bytes: 8192\nwrite_bytes: 4096\n")
+    fourth = collector.collect_once()
+    assert fourth.processes[0].io_read_rate == 0.0
+    assert fourth.processes[0].io_write_rate == 0.0
+
+
+def test_missing_process_io_file_does_not_hide_process(
+    tmp_path: Path,
+) -> None:
+    _fixture(tmp_path)
+    (tmp_path / "123" / "io").unlink()
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.processes[0].io_read_rate is None
+    assert snapshot.processes[0].io_write_rate is None
 
 
 def test_collector_skips_process_that_disappears_during_sample(
@@ -184,6 +265,15 @@ def test_sort_processes_orders_by_selected_metric() -> None:
     assert [p.pid for p in sort_processes(rows, "MEM", descending=False)] == [
         20, 10,
     ]
+    io_rows = (
+        replace(rows[0], io_read_rate=100.0),
+        replace(rows[1], io_read_rate=500.0),
+    )
+    assert [p.pid for p in sort_processes(io_rows, "IO_READ")] == [20, 10]
+    write_rows = tuple(
+        replace(process, io_write_rate=process.pid * 10.0) for process in rows
+    )
+    assert [p.pid for p in sort_processes(write_rows, "IO_WRITE")] == [20, 10]
     with pytest.raises(ValueError):
         sort_processes(rows, "NOPE")
 
@@ -294,6 +384,9 @@ def test_cpu_meter_renders_bounded_per_core_bar() -> None:
     assert ProcessMonitorUI._meter(50.0, 4) == "[██  ]"
     assert ProcessMonitorUI._meter(150.0, 3) == "[███]"
     assert ProcessMonitorUI._meter(-1.0, 3) == "[   ]"
+    assert ProcessMonitorUI._fmt_rate(None) == "—"
+    assert ProcessMonitorUI._fmt_rate(1024.0) == "1.0K/s"
+    assert ProcessMonitorUI._fmt_rate(1023.0 * 1024.0) == "1023K/s"
 
 
 def test_signal_action_requires_explicit_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -367,6 +460,7 @@ def test_column_parser_preserves_order_and_accepts_display_aliases() -> None:
         "COMMAND", "PID", "CPU", "STATE", "TIME",
     )
     assert DEFAULT_COLUMNS[-1] == "COMMAND"
+    assert parse_columns("IOR/s,IOW/s") == ("IO_READ", "IO_WRITE")
     with pytest.raises(argparse.ArgumentTypeError, match="unsupported column"):
         parse_columns("PID,NOT_A_COLUMN")
     with pytest.raises(argparse.ArgumentTypeError, match="duplicates"):

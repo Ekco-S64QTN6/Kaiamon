@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Per-process storage I/O rates
+
+- Parse Linux `/proc/<pid>/io` read/write byte counters and calculate per-process rates from monotonic sample intervals.
+- Guard deltas against PID reuse and counter resets; inaccessible or malformed I/O data leaves the process visible with unavailable rates.
+- Add optional `IOR/s` and `IOW/s` columns, I/O sorting, setup-screen column selection, and 8-character default widths.
+- Add synthetic parser, collector, PID-reuse, unavailable-file, sorter, setup, and renderer tests.
+
 ## Unreleased — Editable and persistent column widths
 
 - Extend the F2 setup screen with per-column width controls using `-` and `+`, bounded to 1–120 characters.

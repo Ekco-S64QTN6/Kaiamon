@@ -32,6 +32,8 @@ class ProcessInfo:
     cpu_time_s: float
     command: str
     start_ticks: int
+    io_read_rate: float | None = None
+    io_write_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,26 @@ def parse_proc_stat(contents: str) -> ProcStat:
     }
 
 
+def parse_proc_io(contents: str) -> tuple[int, int]:
+    """Parse cumulative read_bytes/write_bytes counters from /proc/<pid>/io."""
+    counters: dict[str, int] = {}
+    for line in contents.splitlines():
+        key, separator, raw_value = line.partition(":")
+        if not separator or key.strip() not in {"read_bytes", "write_bytes"}:
+            continue
+        try:
+            value = int(raw_value.strip())
+        except ValueError as exc:
+            raise ValueError(f"invalid {key.strip()} counter") from exc
+        if value < 0:
+            raise ValueError(f"negative {key.strip()} counter")
+        counters[key.strip()] = value
+    missing = {"read_bytes", "write_bytes"} - counters.keys()
+    if missing:
+        raise ValueError("missing /proc/<pid>/io counters: " + ", ".join(sorted(missing)))
+    return counters["read_bytes"], counters["write_bytes"]
+
+
 def parse_cpu_times(contents: str) -> tuple[CpuTimes, ...]:
     """Read aggregate and per-core CPU counters from /proc/stat."""
     parsed: list[CpuTimes] = []
@@ -131,17 +153,20 @@ class ProcessCollector:
         clock_ticks: int | None = None,
         page_size: int | None = None,
         uid_lookup: Callable[[int], str] | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
     ) -> None:
         self.proc_root = Path(proc_root)
         self.poll_interval = max(0.05, float(poll_interval))
         self.clock_ticks = clock_ticks or int(os.sysconf("SC_CLK_TCK"))
         self.page_size = page_size or int(os.sysconf("SC_PAGE_SIZE"))
         self._uid_lookup = uid_lookup or self._username
+        self._monotonic_clock = monotonic_clock or time.monotonic
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._snapshot = ProcessSnapshot()
         self._previous_process: dict[int, tuple[int, int]] = {}
+        self._previous_io: dict[int, tuple[int, int, int, float]] = {}
         self._previous_cpu: tuple[CpuTimes, ...] | None = None
 
     @staticmethod
@@ -171,6 +196,7 @@ class ProcessCollector:
 
     def collect_once(self) -> ProcessSnapshot:
         """Collect one sample; public to make fixture-based tests deterministic."""
+        sample_monotonic = self._monotonic_clock()
         cpu_samples = parse_cpu_times((self.proc_root / "stat").read_text())
         mem_total, mem_used = self._read_memory()
         previous_cpu = self._previous_cpu
@@ -190,6 +216,7 @@ class ProcessCollector:
 
         processes: list[ProcessInfo] = []
         current_previous: dict[int, tuple[int, int]] = {}
+        current_io: dict[int, tuple[int, int, int, float]] = {}
         for entry in self.proc_root.iterdir():
             if not entry.name.isdigit():
                 continue
@@ -212,6 +239,25 @@ class ProcessCollector:
                             proc_delta / total_delta
                         ) * max(1, len(cpu_samples) - 1) * 100.0
                 current_previous[pid] = (proc_ticks, start_ticks)
+                io_read_rate: float | None = None
+                io_write_rate: float | None = None
+                try:
+                    io_read_bytes, io_write_bytes = parse_proc_io(
+                        (entry / "io").read_text()
+                    )
+                except (OSError, ValueError):
+                    # I/O counters may be hidden by procfs permissions or unavailable.
+                    pass
+                else:
+                    previous_io = self._previous_io.get(pid)
+                    if previous_io and previous_io[0] == start_ticks:
+                        elapsed = sample_monotonic - previous_io[3]
+                        if elapsed > 0:
+                            io_read_rate = max(0, io_read_bytes - previous_io[1]) / elapsed
+                            io_write_rate = max(0, io_write_bytes - previous_io[2]) / elapsed
+                    current_io[pid] = (
+                        start_ticks, io_read_bytes, io_write_bytes, sample_monotonic,
+                    )
                 status = self._read_status(entry / "status")
                 uid_fields = status.get("Uid", "0").split()
                 uid_text = uid_fields[1] if len(uid_fields) > 1 else uid_fields[0]
@@ -247,11 +293,14 @@ class ProcessCollector:
                     cpu_time_s=proc_ticks / self.clock_ticks,
                     command=command,
                     start_ticks=start_ticks,
+                    io_read_rate=io_read_rate,
+                    io_write_rate=io_write_rate,
                 ))
             except (OSError, ValueError, IndexError, KeyError, OverflowError):
                 # Processes routinely exit or become inaccessible while sampled.
                 continue
         self._previous_process = current_previous
+        self._previous_io = current_io
         snapshot = ProcessSnapshot(
             processes=tuple(processes),
             cpu_percent=overall_cpu,
