@@ -25,6 +25,7 @@ from process_monitor import (
     DEFAULT_COLUMNS,
     ProcessMonitorUI,
     filter_processes,
+    filter_tree_context,
     parse_columns,
     parse_refresh_interval,
     sort_processes,
@@ -533,3 +534,50 @@ def test_input_controller_scrolls_process_table_horizontally() -> None:
 
     ui.input.handle_key(ui, ord("["))
     assert ui.horizontal_scroll == 0
+
+
+
+def test_tree_filter_retains_ancestors_but_not_unrelated_processes() -> None:
+    rows = (
+        _proc(1, 0, "root", "init"),
+        _proc(2, 1, "root", "service-manager"),
+        _proc(3, 2, "alice", "needle-worker"),
+        _proc(4, 1, "bob", "unrelated-sibling"),
+        _proc(5, 3, "alice", "unrelated-child"),
+    )
+
+    visible = filter_tree_context(rows, "NEEDLE")
+
+    assert [process.pid for process in visible] == [1, 2, 3]
+
+
+def test_tree_filter_handles_parent_cycles_and_empty_queries() -> None:
+    rows = (
+        _proc(10, 11, "alice", "needle"),
+        _proc(11, 10, "root", "ancestor"),
+        _proc(12, 99, "root", "unrelated"),
+    )
+
+    assert [process.pid for process in filter_tree_context(rows, "needle")] == [
+        10, 11,
+    ]
+    assert filter_tree_context(rows, "") == rows
+    assert filter_tree_context(rows, "not-found") == ()
+
+
+def test_tree_mode_displays_matching_process_with_ancestor_path() -> None:
+    snapshot = ProcessSnapshot(processes=(
+        _proc(1, 0, "root", "init"),
+        _proc(2, 1, "root", "supervisor"),
+        _proc(3, 2, "alice", "needle-worker"),
+        _proc(4, 1, "bob", "unrelated"),
+    ))
+    ui = ProcessMonitorUI()
+    ui.tree_mode = True
+    ui.filter_query = "needle"
+
+    rows = ui._visible(snapshot)
+
+    assert [(process.pid, depth) for process, depth in rows] == [
+        (1, 0), (2, 1), (3, 2),
+    ]
