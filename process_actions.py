@@ -1,7 +1,8 @@
 """Validated Linux process-control operations, independent of curses.
 
 The curses UI is responsible for prompting and confirmation. This module owns
-PID/nice/signal/affinity validation, start-time-verified thread renicing, and the corresponding operating-system calls.
+PID/nice/signal/affinity validation, start-time-verified thread renicing, and
+the corresponding operating-system calls.
 """
 from __future__ import annotations
 
@@ -92,8 +93,6 @@ def set_process_affinity(pid: int, cpus: Iterable[int]) -> frozenset[int]:
         raise OSError(f"PID {pid} has no available CPUs after applying affinity")
     return effective
 
-
-
 def renice_thread(
     tgid: int,
     tid: int,
@@ -117,10 +116,12 @@ def renice_thread(
 
     root = Path(proc_root)
     try:
-        process_stat = parse_proc_stat((root / str(tgid) / "stat").read_text())
+        # Read the thread first and the owner last, minimizing the time between
+        # the final process-identity check and the thread-specific syscall.
         thread_stat = parse_proc_stat(
             (root / str(tgid) / "task" / str(tid) / "stat").read_text()
         )
+        process_stat = parse_proc_stat((root / str(tgid) / "stat").read_text())
     except OSError as exc:
         raise OSError(f"cannot verify TID {tid} in process {tgid}: {exc}") from exc
 
