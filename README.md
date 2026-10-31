@@ -64,6 +64,7 @@ Aggregate CPU and memory meters appear above the table. Up to eight compact per-
 | `K` | Choose TERM, KILL, INT, or HUP; confirm with `y` (default is no) |
 | `r` | Set the selected process nice value (-20 through 19) |
 | `F1` | Show the keybinding summary in the status line |
+| `F2` | Open the column setup screen; Space toggles visibility, Left/Right reorders, Enter applies, and Esc cancels |
 | `q` | Quit |
 
 Process actions follow normal Linux permissions. Kaiamon refuses to signal or renice PID 1 or its own process. Signal selection is explicit and every signal requires a second, default-no confirmation. Use `KILL` only when graceful termination is not appropriate.
@@ -125,6 +126,7 @@ state + delegation      curses only              main-thread curses     signal a
 - `process_config.py` owns versioned preference validation, XDG config-path resolution, and atomic JSON persistence. It does not import curses or depend on the UI.
 - `process_monitor.py` owns the main-thread curses lifecycle and UI state. It reads only frozen `ProcessSnapshot` values; collectors never call curses.
 - `process_input.py` owns keyboard dispatch, tree expansion commands, and interactive prompts. It acts on the UI synchronously, so curses remains on the main thread.
+- `process_setup.py` owns the F2 column editor. It edits a temporary column layout on the curses main thread and applies it only when the user confirms.
 - `process_render.py` owns snapshot-driven process-table and meter rendering. It receives a frozen snapshot and the UI's main-thread drawing surface; it does not access collector state.
 - `process_actions.py` owns validation and the small set of process-control syscalls. It has no curses dependency, making the safety policy independently testable.
 
@@ -136,7 +138,7 @@ The design follows two useful htop lessons: keep platform-specific collection be
 
 **Supported:** live process table; PID/user/priority/nice/virtual/resident/shared/state/CPU/memory/time/command fields; CPU and memory meters; per-core CPU meters; CPU/MEM/PID/USER/TIME/COMMAND sorting; substring filtering; parent/child tree display and collapse; signal selection; renice; keyboard navigation.
 
-**Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its visible columns and sampling interval are configured at launch; filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
+**Different:** Kaiamon reads Linux `/proc` directly and is Linux-only. Its sampling interval is configured at launch; visible columns can be changed at runtime with F2 or at launch. Filtering is substring-based (tree filtering retains available ancestors); per-core meters are compact and limited to the first eight cores shown.
 
 **Not yet implemented:** full htop setup/configuration screens, interactive column-width editing, process/thread toggles, CPU affinity, I/O and disk/network meters, GPU process metrics, configurable color schemes, and non-Linux backends. Kaiamon is htop-style, not a drop-in feature-equivalent replacement.
 

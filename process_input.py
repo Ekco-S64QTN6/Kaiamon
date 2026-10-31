@@ -6,10 +6,11 @@ from typing import Any
 
 from process_actions import SIGNAL_CHOICES, renice_process, signal_process
 from process_config import SORT_FIELDS
+from process_setup import ProcessSetup
 
 
 class ProcessInput:
-    """Handle keyboard actions and prompts against the owning UI state.
+    """Handle key actions and prompts against the owning UI state.
 
     The controller deliberately receives the UI rather than owning curses state:
     every prompt and terminal operation still runs synchronously on the main thread.
@@ -42,7 +43,6 @@ class ProcessInput:
             ui.collapsed.discard(process.pid)
             ui.status = f"Expanded children of PID {process.pid}"
 
-
     def prompt(self, ui: Any, prompt: str) -> str:
         assert ui._stdscr is not None
         height, width = ui._stdscr.getmaxyx()
@@ -63,7 +63,6 @@ class ProcessInput:
             curses.noecho()
             curses.curs_set(0)
 
-
     def handle_key(self, ui: Any, key: int) -> None:
         rows = ui._visible(ui.collector.get_snapshot())
         if key in (curses.KEY_UP, ord("k")):
@@ -78,6 +77,8 @@ class ProcessInput:
             ui.selected = 0
         elif key == curses.KEY_END:
             ui.selected = max(0, len(rows) - 1)
+        elif key == curses.KEY_F2:
+            ProcessSetup().edit(ui)
         elif key in (curses.KEY_F5, ord("t"), ord("T")):
             ui.tree_mode = not ui.tree_mode
             ui.selected = 0
@@ -143,7 +144,6 @@ class ProcessInput:
             ui.status = "Process table shifted right"
         elif key == curses.KEY_F1:
             ui.status = (
-                "↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
+                "F2 Setup  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
                 "←/→ Collapse  Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )
-
