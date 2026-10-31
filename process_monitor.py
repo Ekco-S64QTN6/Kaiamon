@@ -50,7 +50,7 @@ def parse_refresh_interval(value: str) -> float:
 def filter_processes(
     processes: Iterable[ProcessInfo], query: str,
 ) -> tuple[ProcessInfo, ...]:
-    """Filter by PID, user, or command (case-insensitive substring)."""
+    """Filter by PID, user, command, or cgroup path (case-insensitive substring)."""
     needle = query.strip().casefold()
     if not needle:
         return tuple(processes)
