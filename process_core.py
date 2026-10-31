@@ -35,6 +35,7 @@ class ProcessInfo:
     io_read_rate: float | None = None
     io_write_rate: float | None = None
     start_time_s: float | None = None
+    cgroup: str | None = None
 
 
 @dataclass(frozen=True)
@@ -187,6 +188,32 @@ def parse_network_dev(contents: str) -> tuple[NetworkCounters, ...]:
             raise ValueError(f"negative /proc/net/dev counters for {interface}")
         interfaces.append(NetworkCounters(interface, receive_bytes, transmit_bytes))
     return tuple(interfaces)
+
+
+
+def parse_proc_cgroup(contents: str) -> str | None:
+    """Return the most useful process cgroup path, preferring unified v2."""
+    paths: list[str] = []
+    for line in contents.splitlines():
+        hierarchy, separator, remainder = line.partition(":")
+        if not separator or not hierarchy.isdigit():
+            continue
+        controllers, separator, raw_path = remainder.partition(":")
+        if not separator:
+            continue
+        path = raw_path.strip()
+        if not path.startswith("/"):
+            continue
+        if hierarchy == "0":
+            if not controllers:
+                return path
+            # Hierarchy zero is reserved for unified cgroup v2.
+            continue
+        paths.append(path)
+    if not paths:
+        return None
+    # v1 exposes one line per controller; choose the deepest distinct path.
+    return max(paths, key=lambda path: (len(path), path))
 
 
 def parse_proc_io(contents: str) -> tuple[int, int]:
@@ -432,6 +459,11 @@ class ProcessCollector:
                 mem_pct = (
                     res_kb / mem_total * 100.0 if mem_total > 0 else 0.0
                 )
+                try:
+                    cgroup = parse_proc_cgroup((entry / "cgroup").read_text())
+                except OSError:
+                    cgroup = None
+
                 processes.append(ProcessInfo(
                     pid=pid,
                     ppid=int(raw_stat["ppid"]),
@@ -453,6 +485,7 @@ class ProcessCollector:
                         boot_time_s + start_ticks / self.clock_ticks
                         if boot_time_s is not None else None
                     ),
+                    cgroup=cgroup,
                 ))
             except (OSError, ValueError, IndexError, KeyError, OverflowError):
                 # Processes routinely exit or become inaccessible while sampled.
