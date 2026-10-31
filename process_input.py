@@ -64,6 +64,26 @@ class ProcessInput:
             curses.curs_set(0)
 
     def handle_key(self, ui: Any, key: int) -> None:
+        if ui.thread_panel_mode:
+            if key in (curses.KEY_F4, 27):
+                ui.thread_panel_mode = False
+                ui.thread_target_pid = None
+                ui.collector.set_thread_target(None)
+                ui.status = "Process table"
+            elif key in (curses.KEY_UP, ord("k")):
+                ui.thread_panel_scroll = max(0, ui.thread_panel_scroll - 1)
+            elif key in (curses.KEY_DOWN, ord("j")):
+                ui.thread_panel_scroll += 1
+            elif key == curses.KEY_PPAGE:
+                ui.thread_panel_scroll = max(0, ui.thread_panel_scroll - 10)
+            elif key == curses.KEY_NPAGE:
+                ui.thread_panel_scroll += 10
+            elif key == curses.KEY_HOME:
+                ui.thread_panel_scroll = 0
+            elif key == curses.KEY_END:
+                ui.thread_panel_scroll = 10**6
+            return
+
         if ui.system_io_mode:
             if key in (curses.KEY_F3, 27):
                 ui.system_io_mode = False
@@ -101,6 +121,16 @@ class ProcessInput:
             ui.system_io_mode = True
             ui.io_panel_scroll = 0
             ui.status = "System I/O — per-device and per-interface rates"
+        elif key == curses.KEY_F4:
+            process = ui._selected_process()
+            if process is None:
+                ui.status = "Select a process before opening its threads"
+            else:
+                ui.thread_panel_mode = True
+                ui.thread_panel_scroll = 0
+                ui.thread_target_pid = process.pid
+                ui.collector.set_thread_target(process.pid)
+                ui.status = f"Threads for PID {process.pid} — sampling this process only"
         elif key in (curses.KEY_F5, ord("t"), ord("T")):
             ui.tree_mode = not ui.tree_mode
             ui.selected = 0
@@ -166,6 +196,6 @@ class ProcessInput:
             ui.status = "Process table shifted right"
         elif key == curses.KEY_F1:
             ui.status = (
-                "F2 Setup  F3 System I/O  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
+                "F2 Setup  F3 System I/O  F4 Threads  -/+ Width  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns  F5 Tree  "
                 "←/→ Collapse  Space Toggle  F6 Sort  / Filter  K Signal  r Renice  q Quit"
             )
