@@ -34,6 +34,7 @@ class ProcessInfo:
     start_ticks: int
     io_read_rate: float | None = None
     io_write_rate: float | None = None
+    start_time_s: float | None = None
 
 
 @dataclass(frozen=True)
@@ -230,6 +231,25 @@ def parse_cpu_times(contents: str) -> tuple[CpuTimes, ...]:
     return tuple(parsed)
 
 
+
+def parse_boot_time(contents: str) -> int | None:
+    """Return the system boot epoch in seconds from /proc/stat's btime field."""
+    for line in contents.splitlines():
+        key, separator, raw_value = line.partition(" ")
+        if key != "btime":
+            continue
+        if not separator:
+            raise ValueError("malformed /proc/stat boot time")
+        try:
+            boot_time = int(raw_value.strip())
+        except ValueError as exc:
+            raise ValueError("invalid /proc/stat boot time") from exc
+        if boot_time < 0:
+            raise ValueError("negative /proc/stat boot time")
+        return boot_time
+    return None
+
+
 def cpu_usage(previous: CpuTimes, current: CpuTimes) -> float:
     total_delta = current.total - previous.total
     idle_delta = current.idle - previous.idle
@@ -324,7 +344,12 @@ class ProcessCollector:
         with self._lock:
             thread_target_pid = self._thread_target_pid
             thread_target_start_ticks = self._thread_target_start_ticks
-        cpu_samples = parse_cpu_times((self.proc_root / "stat").read_text())
+        proc_stat_contents = (self.proc_root / "stat").read_text()
+        cpu_samples = parse_cpu_times(proc_stat_contents)
+        try:
+            boot_time_s = parse_boot_time(proc_stat_contents)
+        except ValueError:
+            boot_time_s = None
         mem_total, mem_used = self._read_memory()
         previous_cpu = self._previous_cpu
         core_values: list[float] = []
@@ -424,6 +449,10 @@ class ProcessCollector:
                     start_ticks=start_ticks,
                     io_read_rate=io_read_rate,
                     io_write_rate=io_write_rate,
+                    start_time_s=(
+                        boot_time_s + start_ticks / self.clock_ticks
+                        if boot_time_s is not None else None
+                    ),
                 ))
             except (OSError, ValueError, IndexError, KeyError, OverflowError):
                 # Processes routinely exit or become inaccessible while sampled.
