@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Persistent user configuration
+
+- Load versioned JSON preferences from the XDG configuration directory, with a `~/.config` fallback.
+- Persist refresh interval, column order, sort field/direction, and tree mode after a clean exit.
+- Add command-line overrides, custom config paths, and a no-save mode.
+- Write preferences through an atomic replacement with private file permissions; reject invalid configuration instead of silently resetting it.
+- Add validation, round-trip, permission, CLI precedence, and persistence regression tests.
+
 ## Unreleased — Preserve process ancestry in tree filters
 
 - Keep each matching process's available parent chain visible while tree mode is filtered.
