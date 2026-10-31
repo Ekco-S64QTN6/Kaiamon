@@ -37,6 +37,20 @@ class ProcessInfo:
 
 
 @dataclass(frozen=True)
+class DiskIORate:
+    device: str
+    read_bytes_s: float | None = None
+    write_bytes_s: float | None = None
+
+
+@dataclass(frozen=True)
+class NetworkIORate:
+    interface: str
+    receive_bytes_s: float | None = None
+    transmit_bytes_s: float | None = None
+
+
+@dataclass(frozen=True)
 class ProcessSnapshot:
     processes: tuple[ProcessInfo, ...] = ()
     cpu_percent: float = 0.0
@@ -44,6 +58,8 @@ class ProcessSnapshot:
     memory_total_kb: int = 0
     memory_used_kb: int = 0
     sampled_at: float = 0.0
+    disk_io: tuple[DiskIORate, ...] = ()
+    network_io: tuple[NetworkIORate, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,6 +106,67 @@ def parse_proc_stat(contents: str) -> ProcStat:
         "virt_bytes": int(fields[20]),
         "rss_pages": int(fields[21]),
     }
+
+
+@dataclass(frozen=True)
+class DiskCounters:
+    major: int
+    minor: int
+    device: str
+    read_bytes: int
+    write_bytes: int
+
+
+@dataclass(frozen=True)
+class NetworkCounters:
+    interface: str
+    receive_bytes: int
+    transmit_bytes: int
+
+
+def parse_diskstats(contents: str) -> tuple[DiskCounters, ...]:
+    """Parse per-device sector counters from /proc/diskstats (512 bytes/sector)."""
+    devices: list[DiskCounters] = []
+    for line in contents.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if len(parts) < 10:
+            raise ValueError("truncated /proc/diskstats line")
+        try:
+            major, minor = int(parts[0]), int(parts[1])
+            read_sectors, write_sectors = int(parts[5]), int(parts[9])
+        except ValueError as exc:
+            raise ValueError("invalid /proc/diskstats counter") from exc
+        if min(major, minor, read_sectors, write_sectors) < 0:
+            raise ValueError("negative /proc/diskstats counter")
+        devices.append(DiskCounters(
+            major, minor, parts[2], read_sectors * 512, write_sectors * 512,
+        ))
+    return tuple(devices)
+
+
+def parse_network_dev(contents: str) -> tuple[NetworkCounters, ...]:
+    """Parse receive/transmit byte counters from /proc/net/dev."""
+    interfaces: list[NetworkCounters] = []
+    for line in contents.splitlines():
+        interface_text, separator, counters_text = line.partition(":")
+        if not separator:
+            continue
+        interface = interface_text.strip()
+        if not interface:
+            continue
+        values = counters_text.split()
+        if len(values) < 9:
+            raise ValueError("truncated /proc/net/dev line")
+        try:
+            receive_bytes, transmit_bytes = int(values[0]), int(values[8])
+        except ValueError as exc:
+            raise ValueError(f"invalid /proc/net/dev counters for {interface}") from exc
+        if receive_bytes < 0 or transmit_bytes < 0:
+            raise ValueError(f"negative /proc/net/dev counters for {interface}")
+        interfaces.append(NetworkCounters(interface, receive_bytes, transmit_bytes))
+    return tuple(interfaces)
 
 
 def parse_proc_io(contents: str) -> tuple[int, int]:
@@ -167,6 +244,8 @@ class ProcessCollector:
         self._snapshot = ProcessSnapshot()
         self._previous_process: dict[int, tuple[int, int]] = {}
         self._previous_io: dict[int, tuple[int, int, int, float]] = {}
+        self._previous_disk: dict[tuple[int, int], tuple[int, int, float]] = {}
+        self._previous_network: dict[str, tuple[int, int, float]] = {}
         self._previous_cpu: tuple[CpuTimes, ...] | None = None
 
     @staticmethod
@@ -213,6 +292,8 @@ class ProcessCollector:
         overall_cpu = (
             sum(core_values) / len(core_values) if core_values else 0.0
         )
+        disk_io = self._sample_disk_io(sample_monotonic)
+        network_io = self._sample_network_io(sample_monotonic)
 
         processes: list[ProcessInfo] = []
         current_previous: dict[int, tuple[int, int]] = {}
@@ -308,10 +389,67 @@ class ProcessCollector:
             memory_total_kb=mem_total,
             memory_used_kb=mem_used,
             sampled_at=time.time(),
+            disk_io=disk_io,
+            network_io=network_io,
         )
         with self._lock:
             self._snapshot = snapshot
         return snapshot
+
+    def _sample_disk_io(self, sampled_at: float) -> tuple[DiskIORate, ...]:
+        """Calculate per-device disk throughput from /proc/diskstats."""
+        try:
+            counters = parse_diskstats((self.proc_root / "diskstats").read_text())
+        except (OSError, ValueError):
+            self._previous_disk = {}
+            return ()
+        current: dict[tuple[int, int], tuple[int, int, float]] = {}
+        rates: list[DiskIORate] = []
+        for device in counters:
+            key = (device.major, device.minor)
+            previous = self._previous_disk.get(key)
+            read_rate: float | None = None
+            write_rate: float | None = None
+            if previous is not None:
+                elapsed = sampled_at - previous[2]
+                if elapsed > 0:
+                    read_rate = max(0, device.read_bytes - previous[0]) / elapsed
+                    write_rate = max(0, device.write_bytes - previous[1]) / elapsed
+            current[key] = (device.read_bytes, device.write_bytes, sampled_at)
+            rates.append(DiskIORate(device.device, read_rate, write_rate))
+        self._previous_disk = current
+        return tuple(rates)
+
+    def _sample_network_io(self, sampled_at: float) -> tuple[NetworkIORate, ...]:
+        """Calculate per-interface network throughput from /proc/net/dev."""
+        try:
+            counters = parse_network_dev((self.proc_root / "net" / "dev").read_text())
+        except (OSError, ValueError):
+            self._previous_network = {}
+            return ()
+        current: dict[str, tuple[int, int, float]] = {}
+        rates: list[NetworkIORate] = []
+        for interface in counters:
+            previous = self._previous_network.get(interface.interface)
+            receive_rate: float | None = None
+            transmit_rate: float | None = None
+            if previous is not None:
+                elapsed = sampled_at - previous[2]
+                if elapsed > 0:
+                    receive_rate = max(
+                        0, interface.receive_bytes - previous[0],
+                    ) / elapsed
+                    transmit_rate = max(
+                        0, interface.transmit_bytes - previous[1],
+                    ) / elapsed
+            current[interface.interface] = (
+                interface.receive_bytes, interface.transmit_bytes, sampled_at,
+            )
+            rates.append(NetworkIORate(
+                interface.interface, receive_rate, transmit_rate,
+            ))
+        self._previous_network = current
+        return tuple(rates)
 
     @staticmethod
     def _read_status(path: Path) -> dict[str, str]:
