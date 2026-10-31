@@ -275,3 +275,44 @@ def test_thread_renderer_keeps_selected_tid_highlight_when_cpu_order_changes(
         if item[0] == 4 and item[3] > 0
     )
     assert "selected-worker" in selected_line[2]
+
+def test_renderer_displays_process_start_and_elapsed_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI(columns=("PID", "START", "ELAPSED"))
+    screen = FakeScreen(width=80)
+    ui._stdscr = screen
+    process = ProcessInfo(
+        321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+        0.0, 0.0, 1.0, "worker", 10,
+        start_time_s=1000.0,
+    )
+
+    ui.renderer.draw(ui, ProcessSnapshot(
+        processes=(process,), sampled_at=4723.0,
+    ))
+
+    header = next(line for y, _x, line, _n in screen.lines if y == 3)
+    row = next(line for y, _x, line, _n in screen.lines if y == 4)
+    assert "START" in header
+    assert "ELAPSED" in header
+    assert "00:16" in row
+    assert "01:02:03" in row
+
+
+def test_renderer_marks_unknown_process_start_time_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
+    ui = ProcessMonitorUI(columns=("PID", "START", "ELAPSED"))
+    ui._stdscr = FakeScreen(width=80)
+    process = ProcessInfo(
+        321, 1, "tester", 20, 0, 4096, 1024, 128, "S",
+        0.0, 0.0, 1.0, "worker", 10,
+    )
+
+    ui.renderer.draw(ui, ProcessSnapshot(processes=(process,), sampled_at=4723.0))
+
+    row = next(line for y, _x, line, _n in ui._stdscr.lines if y == 4)
+    assert row.count("—") == 2
