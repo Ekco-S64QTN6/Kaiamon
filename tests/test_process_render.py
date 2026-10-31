@@ -227,19 +227,17 @@ def test_renderer_displays_selected_process_thread_cpu_rows(
     assert "F4/Esc Process table" in rendered
 
 
-def test_renderer_handles_exited_thread_target() -> None:
-    monkeypatch = pytest.MonkeyPatch()
+def test_renderer_handles_exited_thread_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("process_render.curses.color_pair", lambda value: value)
-    try:
-        ui = ProcessMonitorUI()
-        ui.thread_panel_mode = True
-        ui.thread_target_pid = 999
-        ui._stdscr = FakeScreen(height=18, width=100)
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 999
+    ui._stdscr = FakeScreen(height=18, width=100)
 
-        ui.renderer.draw(ui, ProcessSnapshot())
+    ui.renderer.draw(ui, ProcessSnapshot())
 
-        rendered = "\n".join(line for _y, _x, line, _n in ui._stdscr.lines)
-        assert "THREADS OF PID 999" in rendered
-        assert "No readable threads for this process yet." in rendered
-    finally:
-        monkeypatch.undo()
+    rendered = "\n".join(line for _y, _x, line, _n in ui._stdscr.lines)
+    assert "THREADS OF PID 999" in rendered
+    assert "No readable threads for this process yet." in rendered
