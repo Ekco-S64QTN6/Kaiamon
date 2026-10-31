@@ -122,7 +122,11 @@ class ProcessInput:
                     ui.status = f"Reniced TID {thread.tid} to {actual_nice}"
                 except (ValueError, OSError, PermissionError) as exc:
                     ui.status = f"Thread renice failed: {exc}"
-            if thread_rows and key not in (ord("r"), ord("R")):
+            if thread_rows and key in (
+                curses.KEY_UP, curses.KEY_DOWN, curses.KEY_PPAGE,
+                curses.KEY_NPAGE, curses.KEY_HOME, curses.KEY_END,
+                ord("k"), ord("j"),
+            ):
                 ui.thread_selected_tid = thread_rows[ui.thread_selected].tid
             return
 
@@ -171,6 +175,7 @@ class ProcessInput:
                 ui.thread_panel_mode = True
                 ui.thread_panel_scroll = 0
                 ui.thread_selected = 0
+                ui.thread_selected_tid = None
                 ui.thread_target_pid = process.pid
                 ui.thread_target_start_ticks = process.start_ticks
                 ui.collector.set_thread_target(process.pid, process.start_ticks)
