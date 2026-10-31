@@ -234,17 +234,7 @@ class ProcessRenderer:
             curses.A_REVERSE | curses.A_BOLD,
         )
 
-        threads = sorted(
-            snapshot.threads,
-            key=lambda thread: (thread.cpu_percent, thread.tid),
-            reverse=True,
-        )
-        if threads:
-            ui.thread_selected = min(
-                max(0, ui.thread_selected), len(threads) - 1,
-            )
-        else:
-            ui.thread_selected = 0
+        threads = ui._thread_rows(snapshot)
         body_height = max(0, height - 6)
         if not threads:
             rows = [
