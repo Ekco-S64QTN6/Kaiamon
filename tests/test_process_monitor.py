@@ -178,14 +178,14 @@ def test_process_cpu_is_delta_based_and_starttime_guards_pid_reuse(
 
 
 def test_process_io_rates_use_deltas_and_guard_pid_reuse(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     _fixture(tmp_path)
     sample_times = iter((10.0, 12.0, 14.0))
-    monkeypatch.setattr("process_core.time.monotonic", lambda: next(sample_times))
     collector = ProcessCollector(
         tmp_path, clock_ticks=100, page_size=4096,
         uid_lookup=lambda _uid: "tester",
+        monotonic_clock=lambda: next(sample_times),
     )
 
     first = collector.collect_once()
