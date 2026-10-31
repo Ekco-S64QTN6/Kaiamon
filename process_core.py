@@ -312,14 +312,18 @@ class ProcessCollector:
             or start_ticks < 0
         ):
             raise ValueError("thread target start ticks must be a non-negative integer")
-        self._thread_target_pid = pid
-        self._thread_target_start_ticks = start_ticks
+        # Read/write the pair under the snapshot lock so the collector cannot
+        # combine a new PID with an old start-time identity during UI changes.
+        with self._lock:
+            self._thread_target_pid = pid
+            self._thread_target_start_ticks = start_ticks
 
     def collect_once(self) -> ProcessSnapshot:
         """Collect one sample; public to make fixture-based tests deterministic."""
         sample_monotonic = self._monotonic_clock()
-        thread_target_pid = self._thread_target_pid
-        thread_target_start_ticks = self._thread_target_start_ticks
+        with self._lock:
+            thread_target_pid = self._thread_target_pid
+            thread_target_start_ticks = self._thread_target_start_ticks
         cpu_samples = parse_cpu_times((self.proc_root / "stat").read_text())
         mem_total, mem_used = self._read_memory()
         previous_cpu = self._previous_cpu
