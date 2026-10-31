@@ -437,8 +437,6 @@ def test_thread_sampling_is_targeted_and_can_be_disabled(
         tmp_path, clock_ticks=100, page_size=4096,
         uid_lookup=lambda _uid: "tester",
     )
-    collector.set_thread_target(123)
-
     collector.set_thread_target(123, 100)
     assert {thread.tid for thread in collector.collect_once().threads} == {123, 456}
 
