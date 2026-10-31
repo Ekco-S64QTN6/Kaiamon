@@ -72,6 +72,28 @@ def filter_processes(
     )
 
 
+def filter_tree_context(
+    processes: Iterable[ProcessInfo], query: str,
+) -> tuple[ProcessInfo, ...]:
+    """Keep matching processes and their available ancestors for tree context."""
+    rows = tuple(processes)
+    matches = filter_processes(rows, query)
+    if not query.strip() or not matches:
+        return matches
+
+    by_pid = {process.pid: process for process in rows}
+    included_pids = {process.pid for process in matches}
+    for process in matches:
+        current = process
+        visited = {process.pid}
+        while current.ppid in by_pid and current.ppid not in visited:
+            parent = by_pid[current.ppid]
+            included_pids.add(parent.pid)
+            visited.add(parent.pid)
+            current = parent
+    return tuple(process for process in rows if process.pid in included_pids)
+
+
 def sort_processes(
     processes: Iterable[ProcessInfo], field: str = "CPU",
     descending: bool = True,
@@ -205,6 +227,8 @@ class ProcessMonitorUI:
             self._handle_key(key)
 
     def _filtered_processes(self, snapshot: ProcessSnapshot) -> tuple[ProcessInfo, ...]:
+        if self.tree_mode:
+            return filter_tree_context(snapshot.processes, self.filter_query)
         return filter_processes(snapshot.processes, self.filter_query)
 
     def _visible(
