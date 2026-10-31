@@ -181,7 +181,7 @@ def test_process_io_rates_use_deltas_and_guard_pid_reuse(
     tmp_path: Path,
 ) -> None:
     _fixture(tmp_path)
-    sample_times = iter((10.0, 12.0, 14.0))
+    sample_times = iter((10.0, 12.0, 14.0, 16.0))
     collector = ProcessCollector(
         tmp_path, clock_ticks=100, page_size=4096,
         uid_lookup=lambda _uid: "tester",
@@ -209,6 +209,12 @@ def test_process_io_rates_use_deltas_and_guard_pid_reuse(
     third = collector.collect_once()
     assert third.processes[0].io_read_rate is None
     assert third.processes[0].io_write_rate is None
+
+    # Counter rollback without PID reuse is clamped instead of producing negatives.
+    (proc / "io").write_text("read_bytes: 8192\nwrite_bytes: 4096\n")
+    fourth = collector.collect_once()
+    assert fourth.processes[0].io_read_rate == 0.0
+    assert fourth.processes[0].io_write_rate == 0.0
 
 
 def test_missing_process_io_file_does_not_hide_process(
