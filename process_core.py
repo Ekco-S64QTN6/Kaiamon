@@ -153,12 +153,14 @@ class ProcessCollector:
         clock_ticks: int | None = None,
         page_size: int | None = None,
         uid_lookup: Callable[[int], str] | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
     ) -> None:
         self.proc_root = Path(proc_root)
         self.poll_interval = max(0.05, float(poll_interval))
         self.clock_ticks = clock_ticks or int(os.sysconf("SC_CLK_TCK"))
         self.page_size = page_size or int(os.sysconf("SC_PAGE_SIZE"))
         self._uid_lookup = uid_lookup or self._username
+        self._monotonic_clock = monotonic_clock or time.monotonic
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -194,7 +196,7 @@ class ProcessCollector:
 
     def collect_once(self) -> ProcessSnapshot:
         """Collect one sample; public to make fixture-based tests deterministic."""
-        sample_monotonic = time.monotonic()
+        sample_monotonic = self._monotonic_clock()
         cpu_samples = parse_cpu_times((self.proc_root / "stat").read_text())
         mem_total, mem_used = self._read_memory()
         previous_cpu = self._previous_cpu
