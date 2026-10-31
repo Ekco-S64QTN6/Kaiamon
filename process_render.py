@@ -152,7 +152,7 @@ class ProcessRenderer:
         ui._put(footer_y, 0, ui.status[:width], curses.color_pair(2))
         ui._put(
             height - 1, 0,
-            f"{len(rows)} processes  |  F2 Setup  q Quit  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns"[:width],
+            f"{len(rows)} processes  |  F2 Setup  F3 System I/O  q Quit  ↑/↓ Select  PgUp/PgDn Scroll  [ ] Columns"[:width],
             curses.A_DIM,
         )
         screen.refresh()
@@ -184,6 +184,7 @@ class ProcessRenderer:
         else:
             lines.append("No network interface counters available")
 
+        ui._put(3, 0, "DEVICE / INTERFACE                         READ / RECEIVE       WRITE / TRANSMIT"[:width], curses.A_DIM)
         first_body_row = 4
         body_height = max(0, height - 6)
         max_scroll = max(0, len(lines) - body_height)
