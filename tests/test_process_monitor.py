@@ -83,16 +83,16 @@ def _proc(
 
 def test_parse_proc_io_reads_storage_byte_counters() -> None:
     assert parse_proc_io(
-        "rchar: 5000\\nwchar: 3000\\nread_bytes: 4096\\nwrite_bytes: 2048\\n"
+        "rchar: 5000\nwchar: 3000\nread_bytes: 4096\nwrite_bytes: 2048\n"
     ) == (4096, 2048)
 
 
 @pytest.mark.parametrize(
     "contents",
     [
-        "read_bytes: 1\\n",
-        "read_bytes: nope\\nwrite_bytes: 2\\n",
-        "read_bytes: -1\\nwrite_bytes: 2\\n",
+        "read_bytes: 1\n",
+        "read_bytes: nope\nwrite_bytes: 2\n",
+        "read_bytes: -1\nwrite_bytes: 2\n",
     ],
 )
 def test_parse_proc_io_rejects_missing_or_invalid_counters(contents: str) -> None:
@@ -194,7 +194,7 @@ def test_process_io_rates_use_deltas_and_guard_pid_reuse(
 
     proc = tmp_path / "123"
     (proc / "io").write_text(
-        "rchar: 9000\\nwchar: 5000\\nread_bytes: 8192\\nwrite_bytes: 4096\\n"
+        "rchar: 9000\nwchar: 5000\nread_bytes: 8192\nwrite_bytes: 4096\n"
     )
     second = collector.collect_once()
     assert second.processes[0].io_read_rate == pytest.approx(2048.0)
@@ -204,7 +204,7 @@ def test_process_io_rates_use_deltas_and_guard_pid_reuse(
         _stat_line(123, "reused worker", utime=1, stime=1, start=999)
     )
     (proc / "io").write_text(
-        "read_bytes: 16384\\nwrite_bytes: 8192\\n"
+        "read_bytes: 16384\nwrite_bytes: 8192\n"
     )
     third = collector.collect_once()
     assert third.processes[0].io_read_rate is None
