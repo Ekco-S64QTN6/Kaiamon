@@ -250,7 +250,7 @@ def test_failed_atomic_replace_keeps_existing_config_and_cleans_temp_file(
 
 def test_invalid_utf8_config_reports_configuration_error(tmp_path: Path) -> None:
     path = tmp_path / "invalid-encoding.json"
-    path.write_bytes(b"\\xff\\xfe")
+    path.write_bytes(b"\xff\xfe")
 
     with pytest.raises(ConfigError, match="could not read"):
         load_config(path)
