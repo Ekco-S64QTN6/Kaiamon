@@ -304,3 +304,5 @@ def test_thread_renderer_detects_same_tid_with_new_start_time(
     assert ui.thread_selected_start_ticks == 301
     assert ui.thread_selection_lost is True
     assert "TID was reused" in ui.status
+
+
