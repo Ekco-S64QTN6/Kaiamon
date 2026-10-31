@@ -200,3 +200,39 @@ def test_editor_cancel_and_stale_pid_never_apply_affinity(
     stale.collector.snapshot = ProcessSnapshot(processes=(_process(start_ticks=999),))
     ProcessAffinityEditor().edit(stale, original)
     assert "exited or was reused" in stale.status
+
+def test_editor_reports_kernel_or_cpuset_restrictions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_affinity.get_available_cpus", lambda: frozenset({0, 1, 2}))
+    monkeypatch.setattr("process_affinity.get_process_affinity", lambda _pid: frozenset({0, 1}))
+    monkeypatch.setattr(
+        "process_affinity.set_process_affinity",
+        lambda _pid, _cpus: frozenset({0}),
+    )
+    ui = FakeUI(
+        _process(),
+        FakeScreen([curses.KEY_DOWN, ord(" "), curses.KEY_DOWN, ord(" "), 10]),
+    )
+
+    ProcessAffinityEditor().edit(ui, _process())
+
+    assert "effective CPUs: 0" in ui.status
+    assert "restricted by kernel/cpuset" in ui.status
+
+
+def test_editor_does_not_prompt_when_mask_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("process_affinity.get_available_cpus", lambda: frozenset({0, 1}))
+    monkeypatch.setattr("process_affinity.get_process_affinity", lambda _pid: frozenset({0, 1}))
+    monkeypatch.setattr(
+        "process_affinity.set_process_affinity",
+        lambda *_args: pytest.fail("unchanged mask reached system call"),
+    )
+    ui = FakeUI(_process(), FakeScreen([10]))
+
+    ui._prompt = lambda _prompt: pytest.fail("unchanged mask requested confirmation")  # type: ignore[method-assign]
+    ProcessAffinityEditor().edit(ui, _process())
+
+    assert ui.status == "CPU affinity unchanged for PID 321"
