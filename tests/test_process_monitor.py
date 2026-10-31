@@ -1135,3 +1135,30 @@ def test_thread_selection_recovers_when_selected_tid_exits() -> None:
     assert ui.thread_selected == 0
     assert ui.thread_selected_tid == 322
     assert "Selected thread exited" in ui.status
+
+def test_thread_renice_requires_review_after_selected_tid_disappears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ui = ProcessMonitorUI()
+    ui.thread_panel_mode = True
+    ui.thread_target_pid = 321
+    ui.thread_target_start_ticks = 100
+    ui.thread_selected_tid = 999
+    thread = ThreadInfo(322, 321, "R", 20, 0, 50.0, 1.0, "replacement", 200)
+    monkeypatch.setattr(
+        ui.collector, "get_snapshot",
+        lambda: ProcessSnapshot(threads=(thread,)),
+    )
+    monkeypatch.setattr(
+        ui, "_prompt",
+        lambda _prompt: pytest.fail("renice prompt shown before replacement selection was reviewed"),
+    )
+    monkeypatch.setattr(
+        "process_input.renice_thread",
+        lambda *_args: pytest.fail("replacement TID reached renice action"),
+    )
+
+    ui._handle_key(ord("r"))
+
+    assert ui.thread_selected_tid == 322
+    assert "review the new selection" in ui.status
