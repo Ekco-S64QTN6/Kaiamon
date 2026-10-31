@@ -21,6 +21,7 @@ from process_core import (
     parse_diskstats,
     parse_network_dev,
     parse_boot_time,
+    parse_proc_cgroup,
     parse_proc_io,
     parse_proc_stat,
 )
@@ -84,6 +85,10 @@ def _fixture(root: Path, *, user_proc: bool = True) -> None:
         )
         (proc / "statm").write_text("1000 100 20 0 0 0 0\n")
         (proc / "cmdline").write_bytes(b"python\0worker.py\0")
+        (proc / "cgroup").write_text(
+            "12:memory:/docker/legacy-container\n"
+            "0::/system.slice/kaiamon.service\n"
+        )
         (proc / "io").write_text("rchar: 5000\nwchar: 3000\nsyscr: 4\nsyscw: 2\nread_bytes: 4096\nwrite_bytes: 2048\n")
         main_task = proc / "task" / "123"
         main_task.mkdir(parents=True)
@@ -141,6 +146,32 @@ def test_parse_network_dev_skips_headers_and_reads_interface_counters() -> None:
 def test_parse_network_dev_rejects_truncated_interface_counters() -> None:
     with pytest.raises(ValueError, match="truncated"):
         parse_network_dev("eth0: 1 2 3\n")
+
+
+
+def test_parse_proc_cgroup_prefers_unified_v2_hierarchy() -> None:
+    contents = (
+        "12:memory:/docker/legacy-container\n"
+        "0::/system.slice/kaiamon.service\n"
+        "7:cpu,cpuacct:/legacy/cpu\n"
+    )
+
+    assert parse_proc_cgroup(contents) == "/system.slice/kaiamon.service"
+
+
+def test_parse_proc_cgroup_falls_back_to_deepest_v1_path() -> None:
+    contents = (
+        "2:cpu:/system.slice/workload\n"
+        "3:memory:/system.slice/workload/container\n"
+        "4:pids:/system.slice/workload\n"
+    )
+
+    assert parse_proc_cgroup(contents) == "/system.slice/workload/container"
+
+
+@pytest.mark.parametrize("contents", ["", "malformed", "0:cpu:/invalid", "2:memory:relative"])
+def test_parse_proc_cgroup_returns_none_for_unusable_data(contents: str) -> None:
+    assert parse_proc_cgroup(contents) is None
 
 
 def test_parse_proc_io_reads_storage_byte_counters() -> None:
@@ -206,6 +237,7 @@ def test_process_collector_reads_fixture_and_publishes_nonempty_snapshot(
     assert process.shr_kb == 80
     assert process.cpu_time_s == pytest.approx(0.15)
     assert process.start_time_s == pytest.approx(1700000001.0)
+    assert process.cgroup == "/system.slice/kaiamon.service"
     assert process.io_read_rate is None
     assert process.io_write_rate is None
     assert first.memory_total_kb == 100000
@@ -281,6 +313,21 @@ def test_start_and_elapsed_time_formatters_handle_today_old_and_missing() -> Non
 
 
 @pytest.mark.parametrize("boot_line", [None, "btime invalid\n"])
+
+def test_missing_process_cgroup_file_does_not_hide_process(tmp_path: Path) -> None:
+    _fixture(tmp_path)
+    (tmp_path / "123" / "cgroup").unlink()
+    collector = ProcessCollector(
+        tmp_path, clock_ticks=100, page_size=4096,
+        uid_lookup=lambda _uid: "tester",
+    )
+
+    snapshot = collector.collect_once()
+
+    assert [process.pid for process in snapshot.processes] == [123]
+    assert snapshot.processes[0].cgroup is None
+
+
 def test_collector_keeps_process_visible_when_boot_time_unavailable(
     tmp_path: Path, boot_line: str | None,
 ) -> None:
@@ -616,14 +663,28 @@ def test_collector_skips_process_that_disappears_during_sample(
     assert snapshot.processes == ()
 
 
-def test_filter_matches_pid_user_and_command() -> None:
+def test_filter_matches_pid_user_command_and_cgroup() -> None:
     rows = (
-        _proc(10, 1, "alice", "python worker"),
+        replace(_proc(10, 1, "alice", "python worker"), cgroup="/system.slice/docker-app.scope"),
         _proc(20, 10, "bob", "nginx"),
     )
     assert [p.pid for p in filter_processes(rows, "ALICE")] == [10]
     assert [p.pid for p in filter_processes(rows, "20")] == [20]
     assert [p.pid for p in filter_processes(rows, "PYTHON")] == [10]
+    assert [p.pid for p in filter_processes(rows, "DOCKER-APP")] == [10]
+
+
+
+def test_cgroup_sorting_keeps_missing_paths_last_and_supports_generators() -> None:
+    rows = (
+        replace(_proc(10, 1, "alice", "one"), cgroup="/system.slice/z.service"),
+        replace(_proc(20, 1, "bob", "two"), cgroup="/system.slice/a.service"),
+        replace(_proc(30, 1, "carol", "three"), cgroup=None),
+    )
+
+    assert [p.pid for p in sort_processes(rows, "CGROUP")] == [10, 20, 30]
+    assert [p.pid for p in sort_processes(rows, "CGROUP", descending=False)] == [20, 10, 30]
+    assert [p.pid for p in sort_processes(iter(rows), "CGROUP")] == [10, 20, 30]
 
 
 def test_sort_processes_orders_by_selected_metric() -> None:
