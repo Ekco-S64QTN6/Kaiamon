@@ -386,6 +386,7 @@ def test_cpu_meter_renders_bounded_per_core_bar() -> None:
     assert ProcessMonitorUI._meter(-1.0, 3) == "[   ]"
     assert ProcessMonitorUI._fmt_rate(None) == "—"
     assert ProcessMonitorUI._fmt_rate(1024.0) == "1.0K/s"
+    assert ProcessMonitorUI._fmt_rate(1023.0 * 1024.0) == "1023K/s"
 
 
 def test_signal_action_requires_explicit_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
