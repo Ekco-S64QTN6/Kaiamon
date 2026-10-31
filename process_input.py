@@ -5,8 +5,7 @@ import curses
 from typing import Any
 
 from process_actions import SIGNAL_CHOICES, renice_process, signal_process
-
-SORT_FIELDS = ("CPU", "MEM", "PID", "USER", "TIME", "COMMAND")
+from process_config import SORT_FIELDS
 
 
 class ProcessInput:
