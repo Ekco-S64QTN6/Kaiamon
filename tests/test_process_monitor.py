@@ -275,7 +275,7 @@ def test_start_and_elapsed_sorting_use_process_start_epoch() -> None:
 
 
 
-def test_f6_cycles_through_start_and_elapsed_sort_modes() -> None:
+def test_f6_cycles_through_start_elapsed_and_cgroup_sort_modes() -> None:
     ui = ProcessMonitorUI(sort_field="IO_WRITE", descending=False)
 
     ui._handle_key(curses.KEY_F6)
@@ -288,6 +288,14 @@ def test_f6_cycles_through_start_and_elapsed_sort_modes() -> None:
 
     ui._handle_key(curses.KEY_F6)
     assert ui.sort_field == "ELAPSED"
+    assert ui.descending is True
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "ELAPSED"
+    assert ui.descending is False
+
+    ui._handle_key(curses.KEY_F6)
+    assert ui.sort_field == "CGROUP"
     assert ui.descending is True
 
 
