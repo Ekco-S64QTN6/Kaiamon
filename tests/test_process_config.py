@@ -103,6 +103,7 @@ def test_column_normalization_supports_aliases_and_rejects_bad_shapes() -> None:
     assert normalize_columns([" command ", "pid", "CPU%"]) == (
         "COMMAND", "PID", "CPU",
     )
+    assert normalize_columns(["IOR/s", "IOW/s"]) == ("IO_READ", "IO_WRITE")
     with pytest.raises(ValueError, match="non-string"):
         normalize_columns(["PID", 3])
 
