@@ -1,7 +1,8 @@
 """Validated Linux process-control operations, independent of curses.
 
 The curses UI is responsible for prompting and confirmation. This module owns
-PID/nice/signal/affinity validation, start-time-verified thread renicing, and the corresponding operating-system calls.
+PID/nice/signal/affinity validation, start-time-verified process signalling and
+renicing, start-time-verified thread renicing, and the corresponding operating-system calls.
 """
 from __future__ import annotations
 
@@ -38,19 +39,79 @@ def validate_nice_value(nice: int) -> int:
     return nice
 
 
-def signal_process(pid: int, signum: int) -> None:
-    """Send one of the explicitly supported signals to a validated PID."""
+def _verify_process_start(
+    pid: int, expected_start_ticks: int, proc_root: str | Path
+) -> None:
+    """Reject a PID that exited or was reused since the user selected it."""
+    if (
+        isinstance(expected_start_ticks, bool)
+        or not isinstance(expected_start_ticks, int)
+        or expected_start_ticks < 0
+    ):
+        raise ValueError("expected process start ticks must be a non-negative integer")
+    try:
+        stat = parse_proc_stat((Path(proc_root) / str(pid) / "stat").read_text())
+    except OSError as exc:
+        raise OSError(f"cannot verify PID {pid}: {exc}") from exc
+    if stat["pid"] != pid or stat["start_ticks"] != expected_start_ticks:
+        raise ValueError(f"PID {pid} exited or was reused; nothing was changed")
+
+
+def signal_process(
+    pid: int,
+    signum: int,
+    expected_start_ticks: int | None = None,
+    *,
+    proc_root: str | Path = "/proc",
+) -> None:
+    """Send one of the explicitly supported signals to a validated PID.
+
+    With ``expected_start_ticks`` the target is pinned with a pidfd before its
+    start time is checked, so a PID recycled while the user answered the
+    prompts cannot receive the signal. The UI always passes it; it is optional
+    only for callers that have no snapshot identity.
+    """
     validate_process_target(pid)
     allowed = {value for value, _label in SIGNAL_CHOICES.values()}
     if isinstance(signum, bool) or not isinstance(signum, int) or signum not in allowed:
         raise ValueError("unsupported process signal")
-    os.kill(pid, signum)
+    if expected_start_ticks is None:
+        os.kill(pid, signum)
+        return
+
+    pidfd_open = getattr(os, "pidfd_open", None)
+    pidfd_send_signal = getattr(signal, "pidfd_send_signal", None)
+    if pidfd_open is None or pidfd_send_signal is None:
+        # No pidfd support: verify, then signal. A reuse in between is still
+        # possible, but the window is microseconds rather than two prompts.
+        _verify_process_start(pid, expected_start_ticks, proc_root)
+        os.kill(pid, signum)
+        return
+
+    pidfd = pidfd_open(pid)
+    try:
+        # The pidfd refers to whichever process held the PID when it was
+        # opened; if that is the selected process, it cannot be swapped out
+        # before the signal is delivered.
+        _verify_process_start(pid, expected_start_ticks, proc_root)
+        pidfd_send_signal(pidfd, signum)
+    finally:
+        os.close(pidfd)
 
 
-def renice_process(pid: int, nice: int) -> None:
-    """Set the nice value for a validated process."""
+def renice_process(
+    pid: int,
+    nice: int,
+    expected_start_ticks: int | None = None,
+    *,
+    proc_root: str | Path = "/proc",
+) -> None:
+    """Set the nice value for a validated process, rejecting a reused PID."""
     validate_process_target(pid)
-    os.setpriority(os.PRIO_PROCESS, pid, validate_nice_value(nice))
+    nice_value = validate_nice_value(nice)
+    if expected_start_ticks is not None:
+        _verify_process_start(pid, expected_start_ticks, proc_root)
+    os.setpriority(os.PRIO_PROCESS, pid, nice_value)
 
 
 def get_available_cpus() -> frozenset[int]:

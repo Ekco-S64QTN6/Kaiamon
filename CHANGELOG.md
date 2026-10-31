@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — PID-reuse-safe signal and renice
+
+- `K` (signal) and `r` (renice) now verify the selected process's start ticks before acting. They previously acted on the bare PID after two unbounded prompts, so a process that exited and had its PID reused in the meantime could receive SIGKILL in its place. Signals go through a pidfd opened before the check, so the verified process cannot be swapped out; without pidfd support the check runs immediately before `os.kill`.
+- Thread renice already verified identity; process actions now match it.
+
+
 ## Unreleased — Process cgroup metadata
 
 - Parse `/proc/<pid>/cgroup`, preferring the unified cgroup v2 path and falling back to the deepest available v1 hierarchy path.

@@ -232,7 +232,7 @@ class ProcessInput:
             if proc:
                 value = ui._prompt(f"Renice PID {proc.pid} to [-20..19]: ")
                 try:
-                    renice_process(proc.pid, int(value))
+                    renice_process(proc.pid, int(value), proc.start_ticks)
                     ui.status = f"Reniced PID {proc.pid} to {int(value)}"
                 except (ValueError, OSError, PermissionError) as exc:
                     ui.status = f"Renice failed: {exc}"
@@ -250,7 +250,7 @@ class ProcessInput:
                     if confirmation.casefold() != "y":
                         ui.status = f"{label} cancelled for PID {proc.pid}"
                         return
-                    signal_process(proc.pid, int(signum))
+                    signal_process(proc.pid, int(signum), proc.start_ticks)
                     ui.status = f"Sent {label} to PID {proc.pid}"
                 except (KeyError, ValueError, OSError, PermissionError) as exc:
                     ui.status = f"Signal failed: {exc}"

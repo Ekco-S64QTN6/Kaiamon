@@ -1060,7 +1060,7 @@ def test_signal_action_requires_explicit_confirmation(monkeypatch: pytest.Monkey
     signal_calls: list[tuple[int, int]] = []
     monkeypatch.setattr(
         "process_input.signal_process",
-        lambda pid, signum: signal_calls.append((pid, signum)),
+        lambda pid, signum, start_ticks=None: signal_calls.append((pid, signum)),
     )
 
     ui._handle_key(ord("K"))
@@ -1081,15 +1081,17 @@ def test_signal_action_runs_only_after_yes_confirmation(monkeypatch: pytest.Monk
     ui.collector = FakeCollector()  # type: ignore[assignment]
     prompts = iter(("2", "Y"))
     monkeypatch.setattr(ui, "_prompt", lambda _prompt: next(prompts))
-    signal_calls: list[tuple[int, int]] = []
+    signal_calls: list[tuple[int, int, int | None]] = []
     monkeypatch.setattr(
         "process_input.signal_process",
-        lambda pid, signum: signal_calls.append((pid, signum)),
+        lambda pid, signum, start_ticks=None: signal_calls.append((pid, signum, start_ticks)),
     )
 
     ui._handle_key(ord("K"))
 
-    assert signal_calls == [(321, int(signal.SIGKILL))]
+    # The snapshot's start ticks go along, so a PID reused during the prompts
+    # is refused rather than killed.
+    assert signal_calls == [(321, int(signal.SIGKILL), process.start_ticks)]
     assert ui.status == "Sent KILL to PID 321"
 
 
