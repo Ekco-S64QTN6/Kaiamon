@@ -4,17 +4,9 @@
 
 - Add `r` in the F4 thread inspector to change the selected thread's nice value, with input validation and default-no confirmation.
 - Verify both the owning process and selected TID using `/proc` start-time ticks immediately before the thread-specific `setpriority` call.
-- Keep thread selection attached to its TID while CPU sorting changes between samples; recover clearly when the selected thread exits.
+- Keep thread selection attached to its TID and start-time identity while CPU sorting changes; reject a reused TID until the user reviews the replacement.\n- Revalidate the owning process after collecting its task directory, and read owner identity last before thread-specific setpriority.
 - Read and update the collector's thread target PID/start-time pair atomically.
 - Add synthetic coverage for per-thread renice validation, stale/malformed procfs identity, confirmation, selection stability, and renderer highlighting.
-
-## Unreleased — Safe per-thread renicing
-
-- Add selectable thread rows in F4 and allow `r` to request a nice value for the selected TID.
-- Require default-no confirmation and verify both parent PID and thread TID start-time ticks against procfs immediately before `setpriority`.
-- Bind active thread sampling to both the target PID and its original start time so PID reuse cannot silently change the inspected process.
-- Keep thread signalling deferred; add tests for action validation, parent/TID reuse, F4 selection, confirmed/declined renice, and inspector lifecycle.
-
 
 ## Unreleased — Safe process CPU-affinity editor
 
