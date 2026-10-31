@@ -184,7 +184,9 @@ class ProcessMonitorUI:
         self.io_panel_scroll = 0
         self.thread_panel_mode = False
         self.thread_panel_scroll = 0
+        self.thread_selected = 0
         self.thread_target_pid: int | None = None
+        self.thread_target_start_ticks: int | None = None
         self.filter_query = ""
         self.collapsed: set[int] = set()
         self.status = (
