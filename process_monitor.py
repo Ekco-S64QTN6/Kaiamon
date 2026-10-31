@@ -59,6 +59,7 @@ def filter_processes(
         if needle in str(process.pid)
         or needle in process.user.casefold()
         or needle in process.command.casefold()
+        or needle in (process.cgroup or "").casefold()
     )
 
 
@@ -101,20 +102,26 @@ def sort_processes(
         "IO_WRITE": lambda p: p.io_write_rate or 0.0,
         "START": lambda p: p.start_time_s or 0.0,
         "ELAPSED": lambda p: -(p.start_time_s or 0.0),
+        "CGROUP": lambda p: (p.cgroup or "").casefold(),
     }
     if field not in getters:
         raise ValueError(f"unsupported sort field: {field}")
-    if field in {"START", "ELAPSED"}:
+    if field in {"START", "ELAPSED", "CGROUP"}:
         # Materialize once because callers may supply a one-shot process iterator.
         rows = tuple(processes)
-        # Processes without a readable boot-time epoch stay last in either direction.
+        # Keep unavailable metadata last in either sort direction.
+        def has_sort_value(process: ProcessInfo) -> bool:
+            if field == "CGROUP":
+                return process.cgroup is not None
+            return process.start_time_s is not None
+
         known = sorted(
-            (process for process in rows if process.start_time_s is not None),
+            (process for process in rows if has_sort_value(process)),
             key=lambda process: (getters[field](process), process.pid),
             reverse=descending,
         )
         unknown = sorted(
-            (process for process in rows if process.start_time_s is None),
+            (process for process in rows if not has_sort_value(process)),
             key=lambda process: process.pid,
             reverse=descending,
         )
