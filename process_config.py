@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-DEFAULT_REFRESH_INTERVAL = 1.0
+from process_core import POLL_INTERVAL
+
+DEFAULT_REFRESH_INTERVAL = POLL_INTERVAL
 DEFAULT_COLUMNS = (
     "PID", "USER", "PRI", "NI", "VIRT", "RES", "SHR", "STATE",
     "CPU", "MEM", "TIME", "COMMAND",
