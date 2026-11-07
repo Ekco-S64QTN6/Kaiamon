@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Standalone network monitor
+
+- Add `kaiamon_net.py`, a standalone curses network and firewall monitor: interface status, per-interface TX/RX rates with sparklines, firewall chain policies and counters, TCP/UDP connections with PID/program mapping, and a network log stream with filter, sort and pause controls.
+- Independent of the process monitor package and outside the CI lint/type-check file lists; requires `psutil`.
+
+
 ## Unreleased — PID-reuse-safe signal and renice
 
 - `K` (signal) and `r` (renice) now verify the selected process's start ticks before acting. They previously acted on the bare PID after two unbounded prompts, so a process that exited and had its PID reused in the meantime could receive SIGKILL in its place. Signals go through a pidfd opened before the check, so the verified process cannot be swapped out; without pidfd support the check runs immediately before `os.kill`.

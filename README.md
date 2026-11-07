@@ -176,6 +176,16 @@ GitHub Actions runs compileall, pytest, Ruff, and Mypy across Python 3.10–3.13
 
 Keep procfs reads in `process_core.py`, process-control validation/syscalls in `process_actions.py`, and all curses operations on the main thread in `process_monitor.py`. Collectors own their mutable state behind per-collector locks and publish frozen snapshots. Add fixture-based tests for parsing, races, invalid actions, and configuration round trips; do not rely on live host process data or privileged operations. Run the complete suite and static checks before opening a pull request.
 
+## Network monitor (`kaiamon_net.py`)
+
+A separate, standalone curses TUI for network and firewall traffic: interface status, live per-interface bandwidth with sparklines, iptables/nftables chain policies and counters, active TCP/UDP connections mapped to their programs, and a severity-coloured network log stream. Unlike the process monitor it needs `psutil` (`pip install psutil`).
+
+```bash
+python3 kaiamon_net.py
+```
+
+Keys: `Q` quit, `C` clear logs, `P` pause, `F` filter, `S` sort connections, `R` refresh. Some firewall details need root.
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for completed milestones, current limitations, and next steps.

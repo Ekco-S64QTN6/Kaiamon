@@ -19,9 +19,9 @@ The original system-companion dashboard (ping, systemd services, thermals,
 journal) lives in `legacy_dashboard.py` and still runs on its own:
 `python3 legacy_dashboard.py`. It is kept on purpose; do not delete it.
 
-`kaiamon_net.py` may exist untracked in the owner's checkout. It is the owner's
-work in progress, standalone (imports nothing from this package). Leave it out
-of commits unless asked.
+`kaiamon_net.py` is a standalone network/firewall monitor (imports nothing
+from this package) and needs `psutil`. It is not part of the CI ruff/mypy file
+lists; keep it that way unless asked to bring it up to the package's standards.
 
 ## Rules that must not be reverted (2026-10-30)
 
