@@ -110,6 +110,57 @@ NET_LOG_KEYWORDS: frozenset = frozenset({
     "wifi", "wlan", "ethernet", "bridge", "carrier",
 })
 
+# KDE's applet periodically probes devices that NetworkManager intentionally
+# marks unmanaged. Filter only this known, harmless rejection, and only after
+# nmcli confirms the specific adapter is currently unmanaged.
+PLASMA_SCAN_REJECTION: str = "Scanning not allowed while unavailable"
+PLASMA_SCAN_REJECTION_RE = re.compile(
+    r'\bWireless scan on\s+"?(?P<interface>[A-Za-z0-9_.:-]{1,15})"?'
+    r'\s+failed:\s+"?Scanning not allowed while unavailable"?',
+    re.IGNORECASE,
+)
+PLASMA_SERVICE_RE = re.compile(
+    r'\b(?:plasmashell|plasma-nm)(?:\[\d+\])?\s*:',
+    re.IGNORECASE,
+)
+NM_UNMANAGED_CACHE_SECONDS: float = 10.0
+NMCLI_TIMEOUT_SECONDS: float = 2.0
+
+
+def _plasma_unmanaged_interface(line: str) -> Optional[str]:
+    """Return the adapter name for the one expected Plasma/NM scan rejection."""
+    if not PLASMA_SERVICE_RE.search(line):
+        return None
+    match = PLASMA_SCAN_REJECTION_RE.search(line)
+    return match.group("interface") if match else None
+
+
+def _networkmanager_reports_unmanaged(
+    interface: str,
+    *,
+    runner=None,
+) -> bool:
+    """Return True only when nmcli positively reports NM-MANAGED=no."""
+    run = runner or subprocess.run
+    try:
+        result = run(
+            ["nmcli", "-f", "GENERAL.NM-MANAGED", "device", "show", interface],
+            capture_output=True,
+            text=True,
+            timeout=NMCLI_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+    if getattr(result, "returncode", 1) != 0:
+        return False
+    for field_line in str(getattr(result, "stdout", "") or "").splitlines():
+        key, separator, value = field_line.partition(":")
+        if separator and key.strip().upper() == "GENERAL.NM-MANAGED":
+            return value.strip().lower() == "no"
+    return False
+
 # Firewall log action classification
 FW_DROP_KEYWORDS: frozenset = frozenset({
     "DROP", "BLOCK", "DENY", "REJECT", "REFUSED",
@@ -681,6 +732,9 @@ class NetworkLogCollector:
         self._filter_mode: str = "All"
         self._process: Optional[subprocess.Popen] = None
         self._thread: Optional[threading.Thread] = None
+        # _parse_line runs on one collector thread; cache live NM ownership so
+        # a Plasma poll every few seconds does not spawn nmcli for each message.
+        self._nm_managed_cache: Dict[str, Tuple[float, bool]] = {}
 
     def start(self) -> None:
         """Launch the collector thread."""
@@ -769,10 +823,31 @@ class NetworkLogCollector:
                 return "ACCEPT"
         return "INFO"
 
+    def _should_suppress_plasma_scan_rejection(self, line: str) -> bool:
+        """Suppress only known Plasma polling noise for confirmed unmanaged NICs."""
+        interface = _plasma_unmanaged_interface(line)
+        if interface is None:
+            return False
+
+        now = time.monotonic()
+        cached = self._nm_managed_cache.get(interface)
+        if cached is not None and now - cached[0] < NM_UNMANAGED_CACHE_SECONDS:
+            return cached[1]
+
+        unmanaged = _networkmanager_reports_unmanaged(interface)
+        self._nm_managed_cache[interface] = (now, unmanaged)
+        return unmanaged
+
     def _parse_line(self, line: str) -> Optional[FirewallLogEntry]:
         """Parse a raw journalctl line into a FirewallLogEntry, or None to skip."""
         stripped = line.strip()
         if not stripped:
+            return None
+
+        # plasma-nm/ plasmashell retries this scan while an adapter is reserved
+        # by NetworkManager. Keep unrelated scan errors visible, and suppress
+        # this one only when nmcli confirms this exact adapter is unmanaged.
+        if self._should_suppress_plasma_scan_rejection(stripped):
             return None
 
         # Check if this line is network/firewall related
