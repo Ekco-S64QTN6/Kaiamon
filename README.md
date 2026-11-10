@@ -184,7 +184,9 @@ A separate, standalone curses TUI for network and firewall traffic: interface st
 python3 kaiamon_net.py
 ```
 
-Keys: `Q` quit, `C` clear logs, `P` pause, `F` filter, `S` sort connections, `R` refresh. Some firewall details need root.
+Keys: `Q` quit, `C` clear logs, `P` pause, `F` filter, `S` sort connections, `R` refresh.
+
+The journal collector suppresses KDE Plasma's repeated `Wireless scan on "IFACE" failed: "Scanning not allowed while unavailable"` message only when the line comes from `plasmashell` or `plasma-nm` **and** `nmcli` confirms that exact interface reports `GENERAL.NM-MANAGED: no`. This is expected noise for a dongle reserved by another application, not a system-wide scan failure. Other scan errors, messages for managed adapters, and messages from other services remain visible. The NetworkManager result is cached briefly per interface so an applet poll does not start an `nmcli` process for every repeated journal line; if `nmcli` is unavailable or cannot verify the state, Kaiamon keeps the message. Some firewall details need root.
 
 ## Roadmap
 
